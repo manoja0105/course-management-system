@@ -23,6 +23,32 @@ const Course = {
   },
 
 
+  // Find course by title
+  // excludeId is used during update so the course
+  // can keep its own existing title.
+  async findByTitle(title, excludeId = null) {
+
+    let query = `
+      SELECT id, title
+      FROM courses
+      WHERE LOWER(TRIM(title)) = LOWER(TRIM(?))
+    `;
+
+    const params = [title];
+
+    if (excludeId !== null) {
+      query += " AND id != ?";
+      params.push(excludeId);
+    }
+
+    query += " LIMIT 1";
+
+    const [rows] = await db.execute(query, params);
+
+    return rows[0];
+  },
+
+
   // Create course
   async create(course) {
 

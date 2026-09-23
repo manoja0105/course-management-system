@@ -345,6 +345,7 @@ a:hover {
   text-decoration: none;
 }
 
+/* NavLink adds the "active" class automatically */
 .nav-link.active {
   color: var(--color-primary);
   border-bottom-color: var(--color-primary);
@@ -444,6 +445,7 @@ a:hover {
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
 }
+
 
 
 /* =========================================
@@ -748,11 +750,6 @@ textarea.input {
   resize: vertical;
 }
 
-
-/* =========================================
-   Course Catalogue Filter Bar
-   ========================================= */
-
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
@@ -774,98 +771,6 @@ textarea.input {
 .filter-bar .form-group {
   min-width: 220px;
   flex: 1;
-}
-
-
-/* =========================================
-   CR-001 Advanced Search and Filtering
-   ========================================= */
-
-/* Filter inputs */
-.filter-bar .input {
-  flex: 1;
-  min-width: 180px;
-}
-
-.filter-bar input[type="text"] {
-  min-width: 280px;
-}
-
-.filter-bar input[type="number"] {
-  min-width: 160px;
-  max-width: 190px;
-}
-
-
-/* Clear All Filters Button */
-.clear-filters-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  padding: 10px 18px;
-
-  border: 1px solid var(--color-danger);
-  border-radius: var(--radius-sm);
-
-  background-color: var(--color-danger);
-  color: var(--color-white);
-
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: bold;
-
-  cursor: pointer;
-
-  transition:
-    background-color 0.2s,
-    border-color 0.2s,
-    opacity 0.2s;
-}
-
-.clear-filters-btn:hover:not(:disabled) {
-  background-color: var(--color-danger-dark);
-  border-color: var(--color-danger-dark);
-}
-
-.clear-filters-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-
-/* Active Filter Chips */
-.active-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-
-  gap: 8px;
-
-  margin: -10px 0 20px;
-}
-
-.filter-label {
-  color: var(--color-dark);
-  font-size: 0.9rem;
-  font-weight: bold;
-}
-
-.filter-chip {
-  display: inline-flex;
-  align-items: center;
-
-  padding: 5px 12px;
-
-  border-radius: 999px;
-
-  background-color: #eff6ff;
-  color: #1e40af;
-
-  border: 1px solid #bfdbfe;
-
-  font-size: 0.8rem;
-  font-weight: 600;
 }
 
 
@@ -948,6 +853,8 @@ textarea.input {
 }
 
 
+
+
 /* =========================================
    12. Course details page
    ========================================= */
@@ -1023,6 +930,7 @@ textarea.input {
   font-size: 1.25rem !important;
 }
 
+/* Keeps the role based action buttons tidy */
 .details-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1416,22 +1324,6 @@ textarea.input {
     grid-template-columns: 1fr 1fr;
   }
 
-
-  /* =========================================
-     CR-001 Responsive Filters
-     ========================================= */
-
-  .filter-bar .input,
-  .filter-bar input[type="text"],
-  .filter-bar input[type="number"] {
-    min-width: 180px;
-    max-width: none;
-  }
-
-  .clear-filters-btn {
-    width: 100%;
-  }
-
 }
 
 
@@ -1522,32 +1414,141 @@ textarea.input {
     padding: 20px;
   }
 
+}
 
-  /* =========================================
-     CR-001 Mobile Filters
-     ========================================= */
 
+
+
+/* =========================================
+   Advanced Course Filters
+   ========================================= */
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+  align-items: center;
+}
+
+.filter-bar .input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.clear-filter-btn {
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  background: #dc2626;
+  color: white;
+}
+
+.clear-filter-btn:hover {
+  opacity: 0.9;
+}
+
+/* =========================================
+   Active Filter Chips
+   ========================================= */
+
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.filter-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+/* =========================================
+   Result Counter
+   ========================================= */
+
+.result-count {
+  margin: 15px 0;
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* =========================================
+   Empty Filter Result
+   ========================================= */
+
+.empty .clear-filter-btn {
+  margin-top: 10px;
+}
+
+/* =========================================
+   Responsive Filters
+   ========================================= */
+
+@media (max-width: 768px) {
   .filter-bar {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
   }
 
-  .filter-bar .input,
-  .filter-bar input[type="text"],
-  .filter-bar input[type="number"] {
+  .filter-bar .input {
     width: 100%;
-    min-width: 100%;
-    max-width: 100%;
+    min-width: 0;
   }
 
-  .clear-filters-btn {
+  .clear-filter-btn {
     width: 100%;
   }
 
   .active-filters {
     align-items: flex-start;
-    flex-direction: column;
   }
-
 }
+
+
+/* =========================================
+   Course Form Validation - CR-002
+   ========================================= */
+
+/* Invalid input */
+.input-error {
+  border-color: var(--color-danger) !important;
+  background-color: #fffafa;
+}
+
+/* Invalid input focus */
+.input-error:focus {
+  border-color: var(--color-danger) !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+/* Field-level validation message */
+.field-error {
+  margin: 2px 0 0;
+  color: var(--color-error-text);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/* Save button while request is processing */
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+

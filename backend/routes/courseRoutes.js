@@ -1,3 +1,4 @@
+
 const express = require("express");
 
 const router = express.Router();
@@ -15,31 +16,34 @@ const authMiddleware = require("../middleware/authMiddleware");
 const roleMiddleware = require("../middleware/roleMiddleware");
 
 
-// Get statistics (course count + student count)
+// ======================================================
+// Public routes
+// ======================================================
+
+// Statistics
 router.get(
   "/stats",
   getStats
 );
 
-
-// PUBLIC
-// View all courses
+// Get all courses
 router.get(
   "/",
   getAllCourses
 );
 
-
-// PUBLIC
-// View one course
+// Get one course
 router.get(
   "/:id",
   getCourseById
 );
 
 
-// Admin only
-// Create course (JWT + admin role required)
+// ======================================================
+// Admin-only routes
+// ======================================================
+
+// Create course
 router.post(
   "/",
   authMiddleware,
@@ -47,9 +51,7 @@ router.post(
   createCourse
 );
 
-
-// Admin only
-// Update course (JWT + admin role required)
+// Update course
 router.put(
   "/:id",
   authMiddleware,
@@ -57,9 +59,7 @@ router.put(
   updateCourse
 );
 
-
-// Admin only
-// Delete course (JWT + admin role required)
+// Delete course
 router.delete(
   "/:id",
   authMiddleware,
@@ -69,3 +69,4 @@ router.delete(
 
 
 module.exports = router;
+
