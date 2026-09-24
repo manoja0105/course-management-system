@@ -4,6 +4,7 @@ const User = require("../models/userModel");
 const validateCourse = require("../helpers/validateCourse");
 
 
+
 // ======================================================
 // Get all courses
 // ======================================================
