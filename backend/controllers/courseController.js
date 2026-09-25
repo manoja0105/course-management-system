@@ -155,7 +155,7 @@ const updateCourse = async (req, res) => {
     const validation = validateCourse(req.body);
 
     if (!validation.isValid) {
-      return res.status(400).json({
+      return res.status(400).json({ 
         message: "Validation failed",
         errors: validation.errors,
       });
