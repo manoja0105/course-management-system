@@ -2,61 +2,121 @@ const TOKEN_KEY = "token";
 const USER_KEY = "user";
 
 
-// Save token + user after a successful login
+// =====================================================
+// SAVE AUTH
+// =====================================================
+
 export function saveAuth(token, user) {
-  localStorage.setItem(TOKEN_KEY, token);
 
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  localStorage.setItem(
+    TOKEN_KEY,
+    token
+  );
+
+  localStorage.setItem(
+    USER_KEY,
+    JSON.stringify(user)
+  );
 }
 
 
-// Read the token
+// =====================================================
+// GET TOKEN
+// =====================================================
+
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+
+  return localStorage.getItem(
+    TOKEN_KEY
+  );
 }
 
 
-// Read the logged-in user
+// =====================================================
+// GET USER
+// =====================================================
+
 export function getUser() {
-  const userJson = localStorage.getItem(USER_KEY);
+
+  const userJson =
+    localStorage.getItem(USER_KEY);
+
 
   if (!userJson) {
     return null;
   }
 
+
   try {
+
     return JSON.parse(userJson);
+
   } catch (error) {
-    // If the stored value is not valid JSON we treat it as logged out.
-    console.error("Could not read user from localStorage:", error.message);
+
+    console.error(
+      "Could not read user from localStorage:",
+      error.message
+    );
 
     return null;
   }
 }
 
 
-// Logout - remove token and user
+// =====================================================
+// CLEAR AUTH
+// =====================================================
+
 export function clearAuth() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+
+  localStorage.removeItem(
+    TOKEN_KEY
+  );
+
+  localStorage.removeItem(
+    USER_KEY
+  );
 }
 
 
-// Small convenience checks
+// =====================================================
+// LOGIN CHECK
+// =====================================================
+
 export function isLoggedIn() {
-  return Boolean(getToken() && getUser());
+
+  return Boolean(
+    getToken() &&
+    getUser()
+  );
 }
+
+
+// =====================================================
+// GET USER ROLE
+// =====================================================
 
 export function getUserRole() {
+
   const user = getUser();
 
-  return user ? user.role : null;
+  return user
+    ? user.role
+    : null;
 }
 
+
+// =====================================================
+// ROLE HELPERS
+// =====================================================
+
 export function isAdmin() {
+
   return getUserRole() === "admin";
 }
 
+
 export function isStudent() {
+
   return getUserRole() === "student";
 }

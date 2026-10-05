@@ -11,33 +11,40 @@ function ProtectedRoute({ children, role }) {
   const user = getUser();
 
 
-  // ---------- 1. Not logged in ----------
   if (!token || !user) {
+
     return (
       <Navigate
         to="/login"
-        state={{ from: location.pathname }}
+        state={{
+          from:
+            location.pathname +
+            location.search +
+            location.hash
+        }}
         replace
       />
     );
   }
 
-
-  // ---------- 2. Logged in but wrong role ----------
   if (role && user.role !== role) {
 
-    // A student who opens /admin is sent to the student area and the
-    // other way around.
-    const fallback =
-      user.role === "admin" ? "/admin" : "/student";
+    return (
+      <div className="access-denied-container">
 
-    return <Navigate to={fallback} replace />;
+        <h2>Access Denied</h2>
+
+        <p>
+          Access denied. You do not have permission
+          to access this page.
+        </p>
+
+      </div>
+    );
   }
 
-
-  // ---------- 3. Allowed ----------
   return children;
 }
 
-export default ProtectedRoute;
 
+export default ProtectedRoute;

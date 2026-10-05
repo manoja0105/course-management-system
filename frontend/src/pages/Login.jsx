@@ -18,7 +18,18 @@ function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const redirectTo = location.state?.from;
+
+  const savedRedirect = localStorage.getItem("redirectAfterLogin");
+
+  
+  const redirectFromState = location.state?.from;
+
+  
+  const redirectTo = savedRedirect || redirectFromState;
+
+
+  const sessionExpired =
+    localStorage.getItem("sessionExpired") === "true";
 
 
   const handleSubmit = async (event) => {
@@ -28,13 +39,16 @@ function Login() {
 
     setError("");
 
-    // Simple client side check (the backend checks again)
+
+    // Simple client-side validation
     if (!username.trim() || !password) {
       setError("Please enter both username and password.");
       return;
     }
 
+
     setLoading(true);
+
 
     try {
 
@@ -44,41 +58,56 @@ function Login() {
       });
 
 
-      // ---------- Save the JWT and the user ----------
-      saveAuth(response.data.token, response.data.user);
+      saveAuth(
+        response.data.token,
+        response.data.user
+      );
 
 
-      // ---------- Redirect after successful login ----------
+      localStorage.removeItem("sessionExpired");
+
+      if (
+        redirectTo &&
+        !redirectTo.startsWith("/login")
+      ) {
+
+        // Remove the saved redirect after using it
+        localStorage.removeItem("redirectAfterLogin");
+
+        navigate(redirectTo);
+
+        return;
+      }
+
 
       const role = response.data.user.role;
 
-      if (redirectTo && !redirectTo.startsWith("/login")) {
 
-        // Return to the page the user originally wanted
-        navigate(redirectTo);
+      if (role === "admin") {
 
-      } else if (role === "admin") {
-
-        // Normal admin login
         navigate("/admin");
 
       } else {
 
-        // Normal student login
         navigate("/student");
 
       }
 
     } catch (error) {
 
-      // error.response exists when the SERVER answered (400, 401, 500).
-      // It is undefined when the request never reached the server.
       if (error.response) {
 
-        setError(
-          error.response.data?.message ||
-          `Login failed (status ${error.response.status})`
-        );
+        if (error.response.status === 401) {
+
+          setError("Invalid username or password");
+
+        } else {
+
+          setError(
+            error.response.data?.message ||
+            `Login failed (status ${error.response.status})`
+          );
+        }
 
       } else {
 
@@ -90,7 +119,7 @@ function Login() {
 
     } finally {
 
-      // Always stop the loading state, success or failure
+      // Always stop loading
       setLoading(false);
 
     }
@@ -102,49 +131,77 @@ function Login() {
     <>
       <Navbar />
 
+
       <div className="login-container">
 
         <h1>Login</h1>
+
 
         <p className="login-subtitle">
           Sign in to enroll in courses.
         </p>
 
 
+        {/* -----------------------------------------
+            CR-005: Session Expired Message
+            ----------------------------------------- */}
+        {sessionExpired && (
+          <p className="error">
+            Your session has expired. Please log in again.
+          </p>
+        )}
+
+
         <form onSubmit={handleSubmit}>
 
           <div className="form-group">
-            <label htmlFor="username">Username</label>
+
+            <label htmlFor="username">
+              Username
+            </label>
+
 
             <input
               id="username"
               type="text"
               value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              onChange={(event) =>
+                setUsername(event.target.value)
+              }
               placeholder="Enter username"
               autoComplete="username"
               disabled={loading}
             />
+
           </div>
 
 
           <div className="form-group">
-            <label htmlFor="password">Password</label>
+
+            <label htmlFor="password">
+              Password
+            </label>
+
 
             <input
               id="password"
               type="password"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) =>
+                setPassword(event.target.value)
+              }
               placeholder="Enter password"
               autoComplete="current-password"
               disabled={loading}
             />
+
           </div>
 
 
-          {error && (
-            <p className="error">{error}</p>
+          {error && !sessionExpired && (
+            <p className="error">
+              {error}
+            </p>
           )}
 
 
@@ -153,22 +210,36 @@ function Login() {
             className="btn btn-primary btn-block"
             disabled={loading}
           >
+
             <FaSignInAlt />
-            {loading ? "Logging in..." : "Login"}
+
+            {loading
+              ? "Logging in..."
+              : "Login"}
+
           </button>
 
         </form>
 
 
         <p className="login-footer">
+
           Not sure where to go?{" "}
-          <Link to="/courses"><FaSearch /> Browse the courses</Link> first.
+
+          <Link to="/courses">
+            <FaSearch /> Browse the courses
+          </Link>{" "}
+
+          first.
+
         </p>
+
 
       </div>
 
     </>
   );
 }
+
 
 export default Login;
