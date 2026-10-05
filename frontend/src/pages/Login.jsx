@@ -1,6 +1,14 @@
-import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FaSearch, FaSignInAlt } from "react-icons/fa";
+import { useEffect, useState } from "react";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+
+import {
+  FaSearch,
+  FaSignInAlt,
+} from "react-icons/fa";
 
 import api from "../services/api";
 import { saveAuth } from "../services/auth";
@@ -15,34 +23,69 @@ function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+
   const navigate = useNavigate();
   const location = useLocation();
 
 
-  const savedRedirect = localStorage.getItem("redirectAfterLogin");
-
-  
-  const redirectFromState = location.state?.from;
-
-  
-  const redirectTo = savedRedirect || redirectFromState;
-
+  // =====================================================
+  // SESSION EXPIRY INFORMATION
+  // =====================================================
 
   const sessionExpired =
-    localStorage.getItem("sessionExpired") === "true";
+    sessionStorage.getItem("sessionExpired") === "true";
 
+
+  const storedRedirect =
+    sessionStorage.getItem("redirectAfterLogin");
+
+
+  const stateRedirect =
+    location.state?.from;
+
+
+  const redirectTo =
+    storedRedirect ||
+    stateRedirect ||
+    null;
+
+
+  // =====================================================
+  // SHOW SESSION EXPIRED MESSAGE
+  // =====================================================
+
+  useEffect(() => {
+
+    if (sessionExpired) {
+
+      setError(
+        "Your session has expired. Please log in again."
+      );
+
+    }
+
+  }, [sessionExpired]);
+
+
+  // =====================================================
+  // LOGIN
+  // =====================================================
 
   const handleSubmit = async (event) => {
 
-    // Stop the browser from reloading the whole page
     event.preventDefault();
 
     setError("");
 
 
-    // Simple client-side validation
+    // ---------- Basic validation ----------
+
     if (!username.trim() || !password) {
-      setError("Please enter both username and password.");
+
+      setError(
+        "Please enter both username and password."
+      );
+
       return;
     }
 
@@ -52,11 +95,18 @@ function Login() {
 
     try {
 
-      const response = await api.post("/auth/login", {
-        username,
-        password,
-      });
+      // ---------- Login request ----------
 
+      const response = await api.post(
+        "/auth/login",
+        {
+          username,
+          password,
+        }
+      );
+
+
+      // ---------- Save new JWT + user ----------
 
       saveAuth(
         response.data.token,
@@ -64,23 +114,48 @@ function Login() {
       );
 
 
-      localStorage.removeItem("sessionExpired");
+      // ---------- Get role ----------
+
+      const role =
+        response.data.user.role;
+
+
+      // =================================================
+      // RETURN TO ORIGINAL PAGE AFTER SESSION EXPIRY
+      // =================================================
 
       if (
         redirectTo &&
         !redirectTo.startsWith("/login")
       ) {
 
-        // Remove the saved redirect after using it
-        localStorage.removeItem("redirectAfterLogin");
+        sessionStorage.removeItem(
+          "redirectAfterLogin"
+        );
 
-        navigate(redirectTo);
+        sessionStorage.removeItem(
+          "sessionExpired"
+        );
+
+
+        navigate(
+          redirectTo,
+          { replace: true }
+        );
 
         return;
       }
 
 
-      const role = response.data.user.role;
+      // ---------- Normal login ----------
+
+      sessionStorage.removeItem(
+        "redirectAfterLogin"
+      );
+
+      sessionStorage.removeItem(
+        "sessionExpired"
+      );
 
 
       if (role === "admin") {
@@ -95,19 +170,16 @@ function Login() {
 
     } catch (error) {
 
+      // =================================================
+      // NORMAL LOGIN FAILURE
+      // =================================================
+
       if (error.response) {
 
-        if (error.response.status === 401) {
-
-          setError("Invalid username or password");
-
-        } else {
-
-          setError(
-            error.response.data?.message ||
-            `Login failed (status ${error.response.status})`
-          );
-        }
+        setError(
+          error.response.data?.message ||
+          `Login failed (status ${error.response.status})`
+        );
 
       } else {
 
@@ -119,16 +191,17 @@ function Login() {
 
     } finally {
 
-      // Always stop loading
       setLoading(false);
 
     }
+
   };
 
 
   return (
 
     <>
+
       <Navbar />
 
 
@@ -142,24 +215,16 @@ function Login() {
         </p>
 
 
-        {/* -----------------------------------------
-            CR-005: Session Expired Message
-            ----------------------------------------- */}
-        {sessionExpired && (
-          <p className="error">
-            Your session has expired. Please log in again.
-          </p>
-        )}
-
-
         <form onSubmit={handleSubmit}>
+
+
+          {/* ---------- Username ---------- */}
 
           <div className="form-group">
 
             <label htmlFor="username">
               Username
             </label>
-
 
             <input
               id="username"
@@ -176,12 +241,13 @@ function Login() {
           </div>
 
 
+          {/* ---------- Password ---------- */}
+
           <div className="form-group">
 
             <label htmlFor="password">
               Password
             </label>
-
 
             <input
               id="password"
@@ -198,12 +264,16 @@ function Login() {
           </div>
 
 
-          {error && !sessionExpired && (
+          {/* ---------- Error / expiry message ---------- */}
+
+          {error && (
             <p className="error">
               {error}
             </p>
           )}
 
+
+          {/* ---------- Login button ---------- */}
 
           <button
             type="submit"
@@ -227,17 +297,21 @@ function Login() {
           Not sure where to go?{" "}
 
           <Link to="/courses">
-            <FaSearch /> Browse the courses
+
+            <FaSearch />
+
+            Browse the courses
+
           </Link>{" "}
 
           first.
 
         </p>
 
-
       </div>
 
     </>
+
   );
 }
 

@@ -1,10 +1,15 @@
 import axios from "axios";
+import { clearAuth } from "./auth";
+
 
 const api = axios.create({
   baseURL: "http://localhost:3000/api",
 });
 
 
+// =====================================================
+// ADD JWT TOKEN TO REQUESTS
+// =====================================================
 
 api.interceptors.request.use(
   (config) => {
@@ -24,98 +29,94 @@ api.interceptors.request.use(
 );
 
 
+// =====================================================
+// GLOBAL RESPONSE INTERCEPTOR
+// Handles expired / invalid JWT sessions
+// =====================================================
 
+let sessionExpiryRedirecting = false;
 
-let isRedirectingToLogin = false;
 
 api.interceptors.response.use(
+
+  // ---------- Successful response ----------
   (response) => {
     return response;
   },
 
+
+  // ---------- Failed response ----------
   (error) => {
 
-    // Get HTTP response status
     const status = error.response?.status;
 
-    // Get requested URL
-    const requestURL = error.config?.url || "";
-
-    // --------------------------------
-    // Network Error
-    // --------------------------------
-    // No HTTP response means it is a
-    // network/server connection problem.
-    // Do NOT logout the user.
-    // --------------------------------
-    if (!error.response) {
-      return Promise.reject(error);
-    }
+    const requestUrl = error.config?.url || "";
 
 
-    if (status === 401) {
-
-      // IMPORTANT:
-      // Do not treat the Login request's
-      // 401 as session expiry.
-      if (requestURL.includes("/login")) {
-        return Promise.reject(error);
-      }
+    // Login request itself must NOT trigger
+    // the session-expired redirect.
+    const isLoginRequest =
+      requestUrl.includes("/auth/login");
 
 
-      // Prevent multiple simultaneous
-      // 401 responses from causing
-      // multiple redirects.
-      if (!isRedirectingToLogin) {
+    // Only authenticated API requests returning
+    // 401 should trigger session expiry handling.
+    if (
+      status === 401 &&
+      !isLoginRequest &&
+      localStorage.getItem("token")
+    ) {
 
-        isRedirectingToLogin = true;
+      // Prevent multiple API requests from
+      // causing multiple redirects.
+      if (!sessionExpiryRedirecting) {
 
-        // Save the page the user was
-        // currently trying to access.
-        const currentPath =
+        sessionExpiryRedirecting = true;
+
+
+        // Remove old authentication data.
+        clearAuth();
+
+
+        // Remember the page the user was using.
+        const currentPage =
           window.location.pathname +
           window.location.search +
           window.location.hash;
 
-        // Do not save /login itself.
-        if (currentPath !== "/login") {
-          localStorage.setItem(
-            "redirectAfterLogin",
-            currentPath
-          );
-        }
+
+        sessionStorage.setItem(
+          "redirectAfterLogin",
+          currentPage
+        );
 
 
-        // Clear authentication data
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+        // Tell Login page why the user was redirected.
+        sessionStorage.setItem(
+          "sessionExpired",
+          "true"
+        );
 
 
-        // Redirect to Login page
-        window.location.href = "/login";
+        // Redirect to Login.
+        window.location.replace("/login");
+
       }
 
-      return Promise.reject(error);
     }
 
 
-    // --------------------------------
-    // HTTP 403 Forbidden
-    // --------------------------------
-    // Do NOT logout the user.
-    // ProtectedRoute / component can
-    // handle access denied.
-    // --------------------------------
-    if (status === 403) {
-      return Promise.reject(error);
-    }
+    // 403 is NOT handled here.
+    // It should not automatically logout the user.
+
+    // Network errors are also NOT handled here.
+    // They should not clear authentication data.
 
 
-    // --------------------------------
-    // Other errors
-    // --------------------------------
     return Promise.reject(error);
+
   }
+
 );
 
 
