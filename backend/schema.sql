@@ -3,8 +3,12 @@ CREATE DATABASE IF NOT EXISTS course_management;
 USE course_management;
 
 
--- Users table
+-- ======================================================
+-- USERS
+-- ======================================================
+
 CREATE TABLE IF NOT EXISTS users (
+
     id INT AUTO_INCREMENT PRIMARY KEY,
 
     username VARCHAR(50) NOT NULL UNIQUE,
@@ -14,11 +18,16 @@ CREATE TABLE IF NOT EXISTS users (
     full_name VARCHAR(100) NOT NULL,
 
     role ENUM('admin', 'student') NOT NULL
+
 );
 
 
--- Courses table
+-- ======================================================
+-- COURSES
+-- ======================================================
+
 CREATE TABLE IF NOT EXISTS courses (
+
     id INT AUTO_INCREMENT PRIMARY KEY,
 
     title VARCHAR(100) NOT NULL,
@@ -33,32 +42,42 @@ CREATE TABLE IF NOT EXISTS courses (
 
     image VARCHAR(500),
 
-    description TEXT
+    description TEXT,
+
+    -- NULL = unlimited capacity
+    max_students INT NULL
+
 );
 
 
--- Enrollments table
+-- ======================================================
+-- ENROLLMENTS
+-- ======================================================
+
 CREATE TABLE IF NOT EXISTS enrollments (
+
     id INT AUTO_INCREMENT PRIMARY KEY,
 
     student_id INT NOT NULL,
 
     course_id INT NOT NULL,
 
-    enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    enrolled_at TIMESTAMP
+      DEFAULT CURRENT_TIMESTAMP,
 
-    -- A student cannot enroll in the same course twice
+    -- Prevent duplicate enrollment
     UNIQUE (student_id, course_id),
 
-    -- Student account
+    -- Student
     FOREIGN KEY (student_id)
-        REFERENCES users(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE,
+      REFERENCES users(id)
+      ON DELETE CASCADE
+      ON UPDATE CASCADE,
 
     -- Course
     FOREIGN KEY (course_id)
-        REFERENCES courses(id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
+      REFERENCES courses(id)
+      ON DELETE CASCADE
+      ON UPDATE CASCADE
+
 );

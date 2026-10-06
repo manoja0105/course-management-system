@@ -3825,5 +3825,110 @@ textarea.input {
   cursor: not-allowed;
 }
 
+ /* =========================================================
+    CR-007 COURSE CAPACITY / AVAILABILITY
+   ========================================================= */
+
+/* ---------- Course card meta spacing ---------- */
+
+.course-card-meta {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+}
+
+.course-card-meta li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.course-card-meta li:last-child {
+  margin-bottom: 0;
+}
+
+.course-card-meta strong {
+  color: var(--color-dark);
+}
+
+
+/* =========================================================
+   AVAILABILITY TEXT
+   ========================================================= */
+
+.course-available-text {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.course-full-text {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   COURSE FULL TAG
+   ========================================================= */
+
+.tag-full {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   COURSE DETAILS - CAPACITY
+   ========================================================= */
+
+.details-list dd {
+  font-weight: 500;
+}
+
+.details-list dd .success {
+  font-weight: 600;
+}
+
+.details-list dd .error {
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   COURSE FULL NOTICE
+   ========================================================= */
+
+.notice .error {
+  color: #dc2626;
+}
+
+.notice .success {
+  color: #16a34a;
+}
+
+
+/* =========================================================
+   DISABLED COURSE FULL BUTTON
+   ========================================================= */
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+/* =========================================================
+   RESPONSIVE COURSE META
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  .course-card-meta li {
+    font-size: 13px;
+  }
+
+}
 
 

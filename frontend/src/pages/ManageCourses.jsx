@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
@@ -8,17 +8,11 @@ import {
   FaSave,
   FaTimes,
   FaTrash,
-  FaSearch,
-  FaSort,
-  FaSortUp,
-  FaSortDown,
-  FaUndo,
 } from "react-icons/fa";
 
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-
 
 const EMPTY_COURSE = {
   title: "",
@@ -26,10 +20,10 @@ const EMPTY_COURSE = {
   level: "Beginner",
   duration: "",
   price: "",
+  max_students: "",
   image: "",
   description: "",
 };
-
 
 const LEVEL_OPTIONS = [
   "Beginner",
@@ -37,23 +31,38 @@ const LEVEL_OPTIONS = [
   "Advanced",
 ];
 
-
-const DEFAULT_SORT = {
-  field: "",
-  direction: "",
-};
-
-
-// Load course list
 async function fetchAllCourses() {
   const response = await api.get("/courses");
 
   return response.data.courses || [];
 }
 
+function getDurationValue(duration) {
+  if (!duration) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const match = String(duration)
+    .trim()
+    .match(/^(\d+)\s+(Days|Weeks|Months)$/i);
+
+  if (!match) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const amount = Number(match[1]);
+  const unit = match[2].toLowerCase();
+
+  const unitInDays = {
+    days: 1,
+    weeks: 7,
+    months: 30,
+  };
+
+  return amount * unitInDays[unit];
+}
 
 function ManageCourses() {
-
   const [courses, setCourses] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -65,302 +74,210 @@ function ManageCourses() {
 
   const [formData, setFormData] = useState(EMPTY_COURSE);
 
-  // Server-side field errors
   const [fieldErrors, setFieldErrors] = useState({});
 
-  // General form error
   const [formError, setFormError] = useState("");
 
-  // Prevent duplicate submissions
   const [saving, setSaving] = useState(false);
 
-
-  // ======================================================
-  // CR-003 Search / Filter / Sort State
-  // ======================================================
-
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [levelFilter, setLevelFilter] = useState("");
 
-  const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
+  const [categoryFilter, setCategoryFilter] = useState("All");
 
+  const [levelFilter, setLevelFilter] = useState("All");
 
-  // ======================================================
-  // Load courses
-  // ======================================================
+  const [sortField, setSortField] = useState("");
+
+  const [sortDirection, setSortDirection] = useState("asc");
 
   useEffect(() => {
-
     const loadCourses = async () => {
-
       try {
-
         setCourses(await fetchAllCourses());
-
       } catch (error) {
-
         setError(
           error.response?.data?.message ||
-          "Failed to load courses"
+            "Failed to load courses"
         );
-
       } finally {
-
         setLoading(false);
-
       }
     };
 
     loadCourses();
-
   }, []);
-
-
-  // ======================================================
-  // Refresh courses
-  // ======================================================
 
   const refreshCourses = async () => {
     setCourses(await fetchAllCourses());
   };
 
+  const categoryOptions = useMemo(() => {
+    const categories = courses
+      .map((course) =>
+        String(course.category || "").trim()
+      )
+      .filter(Boolean);
 
-  // ======================================================
-  // CR-003 - Search / Filter / Sort
-  // ======================================================
+    return [...new Set(categories)].sort((a, b) =>
+      a.localeCompare(b, undefined, {
+        sensitivity: "base",
+      })
+    );
+  }, [courses]);
 
-  // Get unique categories from existing courses
-  const categoryOptions = [
-    ...new Set(
-      courses
-        .map((course) => course.category)
-        .filter(Boolean)
-    ),
-  ].sort((a, b) =>
-    String(a).localeCompare(String(b), undefined, {
-      sensitivity: "base",
-    })
-  );
+  const displayedCourses = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
 
+    const filtered = courses.filter((course) => {
+      const title = String(
+        course.title || ""
+      ).toLowerCase();
 
-  // Handle sorting
-  const handleSort = (field) => {
+      const category = String(
+        course.category || ""
+      ).toLowerCase();
 
-    setSortConfig((previous) => {
+      const courseId = String(
+        course.id || ""
+      ).toLowerCase();
 
-      // First click on a new column
-      if (previous.field !== field) {
+      const level = String(
+        course.level || ""
+      );
 
-        return {
-          field,
-          direction: "asc",
-        };
-
-      }
-
-      // Same column - reverse direction
-      if (previous.direction === "asc") {
-
-        return {
-          field,
-          direction: "desc",
-        };
-
-      }
-
-      // Third click - remove sorting
-      return DEFAULT_SORT;
-
-    });
-
-  };
-
-
-  // Get sorting icon
-  const getSortIcon = (field) => {
-
-    if (sortConfig.field !== field) {
-      return <FaSort className="sort-icon" />;
-    }
-
-    if (sortConfig.direction === "asc") {
-      return <FaSortUp className="sort-icon" />;
-    }
-
-    return <FaSortDown className="sort-icon" />;
-  };
-
-
-  // Convert duration into a sortable value
-  const getDurationValue = (duration) => {
-
-    if (duration === null || duration === undefined) {
-      return 0;
-    }
-
-    const text = String(duration).toLowerCase().trim();
-
-    // Find first number in duration
-    const match = text.match(/[\d.]+/);
-
-    if (!match) {
-      return 0;
-    }
-
-    const number = parseFloat(match[0]);
-
-    // Convert different units into days where possible
-    if (text.includes("year")) {
-      return number * 365;
-    }
-
-    if (text.includes("month")) {
-      return number * 30;
-    }
-
-    if (text.includes("week")) {
-      return number * 7;
-    }
-
-    if (text.includes("day")) {
-      return number;
-    }
-
-    if (text.includes("hour")) {
-      return number / 24;
-    }
-
-    return number;
-  };
-
-
-  // Filter + sort courses
-  const filteredCourses = courses
-    .filter((course) => {
-
-      const search = searchTerm.trim().toLowerCase();
-
-      if (!search) {
-        return true;
-      }
-
-      const title = String(course.title || "").toLowerCase();
-      const category = String(course.category || "").toLowerCase();
-      const id = String(course.id || "").toLowerCase();
-
-      return (
+      const matchesSearch =
+        !search ||
         title.includes(search) ||
         category.includes(search) ||
-        id.includes(search)
-      );
+        courseId.includes(search);
 
-    })
-    .filter((course) => {
+      const matchesCategory =
+        categoryFilter === "All" ||
+        String(course.category || "").trim() ===
+          categoryFilter;
 
-      if (!categoryFilter) {
-        return true;
-      }
-
-      return (
-        String(course.category || "").toLowerCase() ===
-        categoryFilter.toLowerCase()
-      );
-
-    })
-    .filter((course) => {
-
-      if (!levelFilter) {
-        return true;
-      }
+      const matchesLevel =
+        levelFilter === "All" ||
+        level === levelFilter;
 
       return (
-        String(course.level || "").toLowerCase() ===
-        levelFilter.toLowerCase()
+        matchesSearch &&
+        matchesCategory &&
+        matchesLevel
       );
+    });
 
-    })
-    .sort((a, b) => {
+    if (!sortField) {
+      return filtered;
+    }
 
-      if (!sortConfig.field) {
-        return 0;
-      }
+    const sorted = [...filtered];
 
-      const { field, direction } = sortConfig;
-
-      let valueA;
-      let valueB;
-
-      // Numeric sorting
-      if (field === "price") {
-
-        valueA = parseFloat(a.price) || 0;
-        valueB = parseFloat(b.price) || 0;
-
-      }
-
-      // Duration sorting
-      else if (field === "duration") {
-
-        valueA = getDurationValue(a.duration);
-        valueB = getDurationValue(b.duration);
-
-      }
-
-      // Text / ID sorting
-      else {
-
-        valueA = String(a[field] ?? "").toLowerCase();
-        valueB = String(b[field] ?? "");
-
-        valueB = valueB.toLowerCase();
-
-      }
-
-
+    sorted.sort((a, b) => {
       let comparison = 0;
 
-      if (typeof valueA === "number" && typeof valueB === "number") {
+      if (sortField === "id") {
+        comparison =
+          Number(a.id || 0) -
+          Number(b.id || 0);
+      } else if (sortField === "price") {
+        comparison =
+          Number(a.price || 0) -
+          Number(b.price || 0);
+      } else if (sortField === "max_students") {
+        const aValue =
+          a.max_students === null ||
+          a.max_students === undefined
+            ? Number.POSITIVE_INFINITY
+            : Number(a.max_students);
 
-        comparison = valueA - valueB;
+        const bValue =
+          b.max_students === null ||
+          b.max_students === undefined
+            ? Number.POSITIVE_INFINITY
+            : Number(b.max_students);
 
+        comparison = aValue - bValue;
+      } else if (sortField === "enrolled_count") {
+        comparison =
+          Number(a.enrolled_count || 0) -
+          Number(b.enrolled_count || 0);
+      } else if (sortField === "duration") {
+        comparison =
+          getDurationValue(a.duration) -
+          getDurationValue(b.duration);
       } else {
+        const valueA = String(
+          a[sortField] ?? ""
+        ).trim();
+
+        const valueB = String(
+          b[sortField] ?? ""
+        ).trim();
 
         comparison = valueA.localeCompare(
           valueB,
           undefined,
           {
             sensitivity: "base",
-            numeric: field === "id",
+            numeric: true,
           }
         );
-
       }
 
-      return direction === "asc"
+      if (comparison === 0) {
+        comparison =
+          Number(a.id || 0) -
+          Number(b.id || 0);
+      }
+
+      return sortDirection === "asc"
         ? comparison
         : -comparison;
-
     });
 
+    return sorted;
+  }, [
+    courses,
+    searchTerm,
+    categoryFilter,
+    levelFilter,
+    sortField,
+    sortDirection,
+  ]);
 
-  // Reset search, filters and sorting
-  const resetFilters = () => {
-
-    setSearchTerm("");
-    setCategoryFilter("");
-    setLevelFilter("");
-    setSortConfig(DEFAULT_SORT);
-
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection((previous) =>
+        previous === "asc"
+          ? "desc"
+          : "asc"
+      );
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
   };
 
+  const getSortIndicator = (field) => {
+    if (sortField !== field) {
+      return "";
+    }
 
-  // ======================================================
-  // Form helpers
-  // ======================================================
+    return sortDirection === "asc"
+      ? " ↑"
+      : " ↓";
+  };
+
+  const resetFilters = () => {
+    setSearchTerm("");
+    setCategoryFilter("All");
+    setLevelFilter("All");
+    setSortField("");
+    setSortDirection("asc");
+  };
 
   const handleChange = (event) => {
-
     const { name, value } = event.target;
 
     setFormData((previous) => ({
@@ -376,9 +293,7 @@ function ManageCourses() {
     setFormError("");
   };
 
-
   const openAddForm = () => {
-
     setShowForm(true);
     setEditingId(null);
 
@@ -392,9 +307,7 @@ function ManageCourses() {
     setSuccess("");
   };
 
-
   const openEditForm = (course) => {
-
     setShowForm(true);
     setEditingId(course.id);
 
@@ -404,6 +317,11 @@ function ManageCourses() {
       level: course.level || "Beginner",
       duration: course.duration || "",
       price: String(course.price ?? ""),
+      max_students:
+        course.max_students === null ||
+        course.max_students === undefined
+          ? ""
+          : String(course.max_students),
       image: course.image || "",
       description: course.description || "",
     });
@@ -414,9 +332,7 @@ function ManageCourses() {
     setSuccess("");
   };
 
-
   const closeForm = () => {
-
     setShowForm(false);
     setEditingId(null);
 
@@ -428,13 +344,7 @@ function ManageCourses() {
     setFormError("");
   };
 
-
-  // ======================================================
-  // Create / Update
-  // ======================================================
-
   const handleSubmit = async (event) => {
-
     event.preventDefault();
 
     if (saving) {
@@ -446,46 +356,47 @@ function ManageCourses() {
     setError("");
     setSuccess("");
 
-
     if (!formData.title.trim()) {
-
       setFieldErrors({
         title: "Title is required",
       });
-
       return;
     }
 
-
     if (!formData.category.trim()) {
-
       setFieldErrors({
         category: "Category is required",
       });
-
       return;
     }
 
-
     if (!formData.duration.trim()) {
-
       setFieldErrors({
         duration: "Duration is required",
       });
-
       return;
     }
 
-
     if (formData.price === "") {
-
       setFieldErrors({
         price: "Price is required",
       });
-
       return;
     }
 
+    // CR-007 frontend validation
+    if (
+      formData.max_students !== "" &&
+      !/^[1-9]\d*$/.test(
+        String(formData.max_students).trim()
+      )
+    ) {
+      setFieldErrors({
+        max_students:
+          "Maximum students must be a positive whole number or left blank.",
+      });
+      return;
+    }
 
     const coursePayload = {
       title: formData.title.trim(),
@@ -493,98 +404,64 @@ function ManageCourses() {
       level: formData.level,
       duration: formData.duration.trim(),
       price: formData.price,
+
+      // Blank = unlimited
+      max_students:
+        formData.max_students === ""
+          ? null
+          : Number(formData.max_students),
+
       image: formData.image.trim(),
       description: formData.description.trim(),
     };
 
-
     setSaving(true);
 
-
     try {
-
-      // UPDATE
       if (editingId) {
-
         const response = await api.put(
           `/courses/${editingId}`,
           coursePayload
         );
 
         setSuccess(response.data.message);
-
-      }
-
-      // CREATE
-      else {
-
+      } else {
         const response = await api.post(
           "/courses",
           coursePayload
         );
 
         setSuccess(response.data.message);
-
       }
-
-
-      /*
-        IMPORTANT FOR CR-003
-
-        Do NOT reset:
-        - searchTerm
-        - categoryFilter
-        - levelFilter
-        - sortConfig
-
-        Therefore the current search/filter/sort state
-        remains active after create/update.
-      */
 
       closeForm();
 
       await refreshCourses();
-
     } catch (error) {
-
-      const responseData = error.response?.data;
+      const responseData =
+        error.response?.data;
 
       if (
         error.response?.status === 400 &&
         responseData?.errors
       ) {
-
         setFieldErrors(responseData.errors);
 
         setFormError(
-          responseData.message ||
           "Please correct the highlighted fields."
         );
-
       } else {
-
         setFormError(
           responseData?.message ||
-          "Could not save the course. Please try again."
+            "Could not save the course. Please try again."
         );
-
       }
-
     } finally {
-
       setSaving(false);
-
     }
-
   };
 
-
-  // ======================================================
-  // Delete
-  // ======================================================
-
   const handleDelete = async (course) => {
-
     const confirmed = window.confirm(
       `Delete "${course.title}"? This cannot be undone.`
     );
@@ -597,56 +474,35 @@ function ManageCourses() {
     setSuccess("");
 
     try {
-
       const response = await api.delete(
         `/courses/${course.id}`
       );
 
       setSuccess(response.data.message);
 
-      /*
-        Search/filter/sort states are NOT reset.
-        Therefore they remain active after delete.
-      */
       await refreshCourses();
-
     } catch (error) {
-
       setError(
         error.response?.data?.message ||
-        "Could not delete the course."
+          "Could not delete the course."
       );
-
     }
-
   };
-
-
-  // ======================================================
-  // Render
-  // ======================================================
 
   return (
     <>
       <Navbar />
 
       <div className="container">
-
-        {/* ---------- Header ---------- */}
-
         <div className="page-header">
-
           <div>
-
             <h1>Manage Courses</h1>
 
             <p className="page-subtitle">
               Add new courses, update existing ones, or
               remove courses that are no longer offered.
             </p>
-
           </div>
-
 
           <button
             type="button"
@@ -658,19 +514,17 @@ function ManageCourses() {
             }
             disabled={saving}
           >
-
-            {showForm ? <FaTimes /> : <FaPlus />}
+            {showForm ? (
+              <FaTimes />
+            ) : (
+              <FaPlus />
+            )}
 
             {showForm
               ? "Cancel"
               : "Add Course"}
-
           </button>
-
         </div>
-
-
-        {/* ---------- Success / general errors ---------- */}
 
         {success && (
           <p className="success">
@@ -684,38 +538,23 @@ function ManageCourses() {
           </p>
         )}
 
-
-        {/* ==================================================
-            ADD / EDIT FORM
-        ================================================== */}
-
         {showForm && (
-
           <section className="section-card">
-
             <div className="section-card-header">
-
               <h2>
                 {editingId
                   ? "Edit Course"
                   : "New Course"}
               </h2>
-
             </div>
-
 
             <form
               className="form"
               onSubmit={handleSubmit}
               noValidate
             >
-
-              {/* ---------- Title + Category ---------- */}
-
               <div className="form-row">
-
                 <div className="form-group">
-
                   <label htmlFor="title">
                     Title *
                   </label>
@@ -740,12 +579,9 @@ function ManageCourses() {
                       {fieldErrors.title}
                     </p>
                   )}
-
                 </div>
 
-
                 <div className="form-group">
-
                   <label htmlFor="category">
                     Category *
                   </label>
@@ -770,18 +606,11 @@ function ManageCourses() {
                       {fieldErrors.category}
                     </p>
                   )}
-
                 </div>
-
               </div>
 
-
-              {/* ---------- Level + Duration + Price ---------- */}
-
               <div className="form-row">
-
                 <div className="form-group">
-
                   <label htmlFor="level">
                     Level *
                   </label>
@@ -798,7 +627,6 @@ function ManageCourses() {
                     onChange={handleChange}
                     disabled={saving}
                   >
-
                     {LEVEL_OPTIONS.map(
                       (level) => (
                         <option
@@ -809,7 +637,6 @@ function ManageCourses() {
                         </option>
                       )
                     )}
-
                   </select>
 
                   {fieldErrors.level && (
@@ -817,12 +644,9 @@ function ManageCourses() {
                       {fieldErrors.level}
                     </p>
                   )}
-
                 </div>
 
-
                 <div className="form-group">
-
                   <label htmlFor="duration">
                     Duration *
                   </label>
@@ -847,12 +671,9 @@ function ManageCourses() {
                       {fieldErrors.duration}
                     </p>
                   )}
-
                 </div>
 
-
                 <div className="form-group">
-
                   <label htmlFor="price">
                     Price (Rs.) *
                   </label>
@@ -879,16 +700,49 @@ function ManageCourses() {
                       {fieldErrors.price}
                     </p>
                   )}
-
                 </div>
-
               </div>
 
+              {/* =====================================================
+                  CR-007: Maximum Students
+                  ===================================================== */}
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="max_students">
+                    Maximum Students
+                  </label>
 
-              {/* ---------- Image ---------- */}
+                  <input
+                    id="max_students"
+                    className={`input ${
+                      fieldErrors.max_students
+                        ? "input-error"
+                        : ""
+                    }`}
+                    type="number"
+                    min="1"
+                    step="1"
+                    name="max_students"
+                    value={formData.max_students}
+                    onChange={handleChange}
+                    placeholder="e.g. 30 (blank = Unlimited)"
+                    disabled={saving}
+                  />
+
+                  <small className="form-help">
+                    Leave blank for unlimited
+                    enrollment.
+                  </small>
+
+                  {fieldErrors.max_students && (
+                    <p className="field-error">
+                      {fieldErrors.max_students}
+                    </p>
+                  )}
+                </div>
+              </div>
 
               <div className="form-group">
-
                 <label htmlFor="image">
                   Image URL
                 </label>
@@ -913,14 +767,9 @@ function ManageCourses() {
                     {fieldErrors.image}
                   </p>
                 )}
-
               </div>
 
-
-              {/* ---------- Description ---------- */}
-
               <div className="form-group">
-
                 <label htmlFor="description">
                   Description
                 </label>
@@ -945,11 +794,7 @@ function ManageCourses() {
                     {fieldErrors.description}
                   </p>
                 )}
-
               </div>
-
-
-              {/* ---------- General form error ---------- */}
 
               {formError && (
                 <p className="error">
@@ -957,27 +802,20 @@ function ManageCourses() {
                 </p>
               )}
 
-
-              {/* ---------- Actions ---------- */}
-
               <div className="form-actions">
-
                 <button
                   type="submit"
                   className="btn btn-primary"
                   disabled={saving}
                 >
-
                   <FaSave />
 
                   {saving
                     ? "Saving..."
                     : editingId
-                      ? "Update Course"
-                      : "Create Course"}
-
+                    ? "Update Course"
+                    : "Create Course"}
                 </button>
-
 
                 <button
                   type="button"
@@ -985,32 +823,17 @@ function ManageCourses() {
                   onClick={closeForm}
                   disabled={saving}
                 >
-
                   <FaTimes />
-
                   Cancel
-
                 </button>
-
               </div>
-
             </form>
-
           </section>
         )}
 
-
-        {/* ==================================================
-            COURSE TABLE
-        ================================================== */}
-
         <section className="section-card">
-
           <div className="section-card-header">
-
-            <h2>
-              All Courses
-            </h2>
+            <h2>Course List</h2>
 
             <Link
               to="/admin/enrollments"
@@ -1019,212 +842,124 @@ function ManageCourses() {
               <FaEye />
               Manage enrollments
             </Link>
-
           </div>
 
+          <div className="course-controls">
+            <div className="form-group">
+              <label htmlFor="course-search">
+                Search Courses
+              </label>
 
-          {/* ==================================================
-              CR-003 SEARCH / FILTER BAR
-          ================================================== */}
-
-          {!loading && courses.length > 0 && (
-
-            <div className="course-filter-panel">
-
-              <div className="course-filter-row">
-
-                {/* Search */}
-
-                <div className="filter-group search-group">
-
-                  <label htmlFor="course-search">
-                    Search Courses
-                  </label>
-
-                  <div className="search-input-wrapper">
-
-                    <FaSearch className="search-icon" />
-
-                    <input
-                      id="course-search"
-                      type="text"
-                      className="input search-input"
-                      placeholder="Search by title, category or ID..."
-                      value={searchTerm}
-                      onChange={(event) =>
-                        setSearchTerm(event.target.value)
-                      }
-                    />
-
-                  </div>
-
-                </div>
-
-
-                {/* Category */}
-
-                <div className="filter-group">
-
-                  <label htmlFor="category-filter">
-                    Category
-                  </label>
-
-                  <select
-                    id="category-filter"
-                    className="input"
-                    value={categoryFilter}
-                    onChange={(event) =>
-                      setCategoryFilter(event.target.value)
-                    }
-                  >
-
-                    <option value="">
-                      All Categories
-                    </option>
-
-                    {categoryOptions.map(
-                      (category) => (
-                        <option
-                          key={category}
-                          value={category}
-                        >
-                          {category}
-                        </option>
-                      )
-                    )}
-
-                  </select>
-
-                </div>
-
-
-                {/* Level */}
-
-                <div className="filter-group">
-
-                  <label htmlFor="level-filter">
-                    Level
-                  </label>
-
-                  <select
-                    id="level-filter"
-                    className="input"
-                    value={levelFilter}
-                    onChange={(event) =>
-                      setLevelFilter(event.target.value)
-                    }
-                  >
-
-                    <option value="">
-                      All Levels
-                    </option>
-
-                    {LEVEL_OPTIONS.map(
-                      (level) => (
-                        <option
-                          key={level}
-                          value={level}
-                        >
-                          {level}
-                        </option>
-                      )
-                    )}
-
-                  </select>
-
-                </div>
-
-
-                {/* Reset */}
-
-                <div className="filter-button-wrapper">
-
-                  <button
-                    type="button"
-                    className="btn btn-outline-dark"
-                    onClick={resetFilters}
-                  >
-
-                    <FaUndo />
-
-                    Reset Filters
-
-                  </button>
-
-                </div>
-
-              </div>
-
-
-              {/* Result counter */}
-
-              <div className="filter-result-row">
-
-                <p className="result-count">
-                  Showing{" "}
-                  <strong>
-                    {filteredCourses.length}
-                  </strong>{" "}
-                  of{" "}
-                  <strong>
-                    {courses.length}
-                  </strong>{" "}
-                  courses
-                </p>
-
-                {(searchTerm ||
-                  categoryFilter ||
-                  levelFilter ||
-                  sortConfig.field) && (
-
-                  <div className="active-filter-text">
-
-                    Active:
-
-                    {searchTerm && (
-                      <span>
-                        Search "{searchTerm}"
-                      </span>
-                    )}
-
-                    {categoryFilter && (
-                      <span>
-                        Category: {categoryFilter}
-                      </span>
-                    )}
-
-                    {levelFilter && (
-                      <span>
-                        Level: {levelFilter}
-                      </span>
-                    )}
-
-                    {sortConfig.field && (
-                      <span>
-                        Sort: {sortConfig.field}{" "}
-                        {sortConfig.direction === "asc"
-                          ? "↑"
-                          : "↓"}
-                      </span>
-                    )}
-
-                  </div>
-
-                )}
-
-              </div>
-
+              <input
+                id="course-search"
+                type="text"
+                className="input"
+                value={searchTerm}
+                onChange={(event) =>
+                  setSearchTerm(
+                    event.target.value
+                  )
+                }
+                placeholder="Search by title, category or course ID..."
+              />
             </div>
 
-          )}
+            <div className="form-group">
+              <label htmlFor="category-filter">
+                Category
+              </label>
 
+              <select
+                id="category-filter"
+                className="input"
+                value={categoryFilter}
+                onChange={(event) =>
+                  setCategoryFilter(
+                    event.target.value
+                  )
+                }
+              >
+                <option value="All">
+                  All
+                </option>
+
+                {categoryOptions.map(
+                  (category) => (
+                    <option
+                      key={category}
+                      value={category}
+                    >
+                      {category}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="level-filter">
+                Level
+              </label>
+
+              <select
+                id="level-filter"
+                className="input"
+                value={levelFilter}
+                onChange={(event) =>
+                  setLevelFilter(
+                    event.target.value
+                  )
+                }
+              >
+                <option value="All">
+                  All
+                </option>
+
+                {LEVEL_OPTIONS.map(
+                  (level) => (
+                    <option
+                      key={level}
+                      value={level}
+                    >
+                      {level}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+            <div className="form-group filter-reset-group">
+              <label>&nbsp;</label>
+
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={resetFilters}
+              >
+                Reset Filters
+              </button>
+            </div>
+          </div>
+
+          {!loading && (
+            <div className="result-counter">
+              Showing{" "}
+              <strong>
+                {displayedCourses.length}
+              </strong>{" "}
+              of{" "}
+              <strong>
+                {courses.length}
+              </strong>{" "}
+              courses
+            </div>
+          )}
 
           {loading && (
             <p className="loading">
               Loading courses...
             </p>
           )}
-
 
           {!loading &&
             courses.length === 0 && (
@@ -1234,264 +969,256 @@ function ManageCourses() {
               </p>
             )}
 
-
-          {/* No search/filter results */}
-
           {!loading &&
             courses.length > 0 &&
-            filteredCourses.length === 0 && (
-
-              <div className="no-results-box">
-
-                <p>
-                  No courses found.
-                </p>
+            displayedCourses.length === 0 && (
+              <div className="no-results">
+                <p>No courses found.</p>
 
                 <button
                   type="button"
                   className="btn btn-outline"
                   onClick={resetFilters}
                 >
-                  <FaUndo />
                   Reset Filters
                 </button>
-
               </div>
-
             )}
 
-
           {!loading &&
-            filteredCourses.length > 0 && (
-
+            displayedCourses.length > 0 && (
               <div className="table-wrapper">
-
                 <table className="table">
-
                   <thead>
-
                     <tr>
-
-                      {/* ID */}
-
                       <th>
                         <button
                           type="button"
-                          className="sort-header"
+                          className="sort-button"
                           onClick={() =>
                             handleSort("id")
                           }
                         >
                           ID
-                          {getSortIcon("id")}
+                          {getSortIndicator("id")}
                         </button>
                       </th>
 
-
-                      {/* Image */}
-
-                      <th>
-                        Image
-                      </th>
-
-
-                      {/* Title */}
+                      <th>Image</th>
 
                       <th>
                         <button
                           type="button"
-                          className="sort-header"
+                          className="sort-button"
                           onClick={() =>
                             handleSort("title")
                           }
                         >
                           Title
-                          {getSortIcon("title")}
+                          {getSortIndicator("title")}
                         </button>
                       </th>
-
-
-                      {/* Category */}
 
                       <th>
                         <button
                           type="button"
-                          className="sort-header"
+                          className="sort-button"
                           onClick={() =>
                             handleSort("category")
                           }
                         >
                           Category
-                          {getSortIcon("category")}
+                          {getSortIndicator(
+                            "category"
+                          )}
                         </button>
                       </th>
-
-
-                      {/* Level */}
 
                       <th>
                         <button
                           type="button"
-                          className="sort-header"
+                          className="sort-button"
                           onClick={() =>
                             handleSort("level")
                           }
                         >
                           Level
-                          {getSortIcon("level")}
+                          {getSortIndicator("level")}
                         </button>
                       </th>
-
-
-                      {/* Duration */}
 
                       <th>
                         <button
                           type="button"
-                          className="sort-header"
+                          className="sort-button"
                           onClick={() =>
                             handleSort("duration")
                           }
                         >
                           Duration
-                          {getSortIcon("duration")}
+                          {getSortIndicator(
+                            "duration"
+                          )}
                         </button>
                       </th>
-
-
-                      {/* Price */}
 
                       <th>
                         <button
                           type="button"
-                          className="sort-header"
+                          className="sort-button"
                           onClick={() =>
                             handleSort("price")
                           }
                         >
                           Price
-                          {getSortIcon("price")}
+                          {getSortIndicator("price")}
                         </button>
                       </th>
 
+                      {/* CR-007 */}
+                      <th>
+                        <button
+                          type="button"
+                          className="sort-button"
+                          onClick={() =>
+                            handleSort(
+                              "max_students"
+                            )
+                          }
+                        >
+                          Capacity
+                          {getSortIndicator(
+                            "max_students"
+                          )}
+                        </button>
+                      </th>
 
-                      {/* Actions */}
+                      {/* CR-007 */}
+                      <th>Enrollment</th>
 
                       <th className="table-actions-column">
                         Actions
                       </th>
-
                     </tr>
-
                   </thead>
 
-
                   <tbody>
+                    {displayedCourses.map(
+                      (course) => (
+                        <tr key={course.id}>
+                          <td>{course.id}</td>
 
-                    {filteredCourses.map((course) => (
+                          <td>
+                            {course.image ? (
+                              <img
+                                src={course.image}
+                                alt={course.title}
+                                className="table-thumb"
+                              />
+                            ) : (
+                              "-"
+                            )}
+                          </td>
 
-                      <tr key={course.id}>
+                          <td>{course.title}</td>
 
-                        <td>
-                          {course.id}
-                        </td>
+                          <td>
+                            {course.category}
+                          </td>
 
+                          <td>
+                            <span className="tag tag-level">
+                              {course.level}
+                            </span>
+                          </td>
 
-                        <td>
+                          <td>
+                            {course.duration}
+                          </td>
 
-                          {course.image ? (
+                          <td>
+                            Rs. {course.price}
+                          </td>
 
-                            <img
-                              src={course.image}
-                              alt={course.title}
-                              className="table-thumb"
-                            />
+                          {/* CR-007 Capacity */}
+                          <td>
+                            {course.max_students ===
+                              null ||
+                            course.max_students ===
+                              undefined ? (
+                              <span className="tag">
+                                Unlimited
+                              </span>
+                            ) : (
+                              `${course.max_students} students`
+                            )}
+                          </td>
 
-                          ) : (
+                          {/* CR-007 Enrollment */}
+                          <td>
+                            {course.max_students ===
+                              null ||
+                            course.max_students ===
+                              undefined ? (
+                              `${course.enrolled_count || 0} students`
+                            ) : (
+                              <>
+                                {course.enrolled_count ||
+                                  0}{" "}
+                                /{" "}
+                                {
+                                  course.max_students
+                                }
 
-                            "-"
+                                {course.is_full && (
+                                  <span className="tag">
+                                    {" "}
+                                    Full
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </td>
 
-                          )}
+                          <td>
+                            <div className="table-actions">
+                              <button
+                                type="button"
+                                className="btn btn-small btn-outline"
+                                onClick={() =>
+                                  openEditForm(
+                                    course
+                                  )
+                                }
+                                disabled={saving}
+                              >
+                                <FaEdit />
+                                Edit
+                              </button>
 
-                        </td>
-
-
-                        <td>
-                          {course.title}
-                        </td>
-
-
-                        <td>
-                          {course.category}
-                        </td>
-
-
-                        <td>
-
-                          <span className="tag tag-level">
-                            {course.level}
-                          </span>
-
-                        </td>
-
-
-                        <td>
-                          {course.duration}
-                        </td>
-
-
-                        <td>
-                          Rs. {course.price}
-                        </td>
-
-
-                        <td>
-
-                          <div className="table-actions">
-
-                            <button
-                              type="button"
-                              className="btn btn-small btn-outline"
-                              onClick={() =>
-                                openEditForm(course)
-                              }
-                              disabled={saving}
-                            >
-                              <FaEdit />
-                              Edit
-                            </button>
-
-
-                            <button
-                              type="button"
-                              className="btn btn-small btn-danger"
-                              onClick={() =>
-                                handleDelete(course)
-                              }
-                              disabled={saving}
-                            >
-                              <FaTrash />
-                              Delete
-                            </button>
-
-                          </div>
-
-                        </td>
-
-                      </tr>
-
-                    ))}
-
+                              <button
+                                type="button"
+                                className="btn btn-small btn-danger"
+                                onClick={() =>
+                                  handleDelete(
+                                    course
+                                  )
+                                }
+                                disabled={saving}
+                              >
+                                <FaTrash />
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    )}
                   </tbody>
-
                 </table>
-
               </div>
-
             )}
-
         </section>
-
       </div>
 
       <Footer />
@@ -1499,4 +1226,4 @@ function ManageCourses() {
   );
 }
 
-export default ManageCourses;
+export default ManageCourses
