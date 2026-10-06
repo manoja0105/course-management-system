@@ -3762,5 +3762,68 @@ textarea.input {
     padding: 12px;
   }
 }
+/* ============================================================
+   CR-006: Student Self-Service Enrollment Cancellation
+   ============================================================ */
+
+
+/* Cancel Enrollment button */
+
+.cancel-enrollment-btn {
+  margin-top: 12px;
+}
+
+
+/* Disabled cancellation button */
+
+.cancel-enrollment-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+
+/* Enrollment success message */
+
+.enrollment-message {
+  margin-bottom: 20px;
+}
+
+
+/* Current enrolled status on Course Details */
+
+.enrolled-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  margin-bottom: 15px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+
+/* Make the status icon slightly larger */
+
+.enrolled-status svg {
+  font-size: 20px;
+}
+/* CR-006 danger button */
+
+.btn-danger {
+  background: #dc3545;
+  color: #ffffff;
+  border: 1px solid #dc3545;
+}
+
+.btn-danger:hover {
+  background: #bb2d3b;
+  border-color: #bb2d3b;
+}
+
+.btn-danger:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 
 

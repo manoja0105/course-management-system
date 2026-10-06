@@ -1,8 +1,12 @@
 const db = require("../config/db");
 
+
 const Enrollment = {
 
+  // ============================================================
   // Create enrollment
+  // ============================================================
+
   async create(studentId, courseId) {
     const [result] = await db.execute(
       `INSERT INTO enrollments
@@ -15,7 +19,10 @@ const Enrollment = {
   },
 
 
+  // ============================================================
   // Check if student is already enrolled
+  // ============================================================
+
   async findByStudentAndCourse(studentId, courseId) {
     const [rows] = await db.execute(
       `SELECT *
@@ -29,7 +36,10 @@ const Enrollment = {
   },
 
 
+  // ============================================================
   // Get all courses enrolled by a student
+  // ============================================================
+
   async getByStudent(studentId) {
     const [rows] = await db.execute(
       `SELECT
@@ -55,7 +65,10 @@ const Enrollment = {
   },
 
 
+  // ============================================================
   // Get all students enrolled in a course
+  // ============================================================
+
   async getByCourse(courseId) {
     const [rows] = await db.execute(
       `SELECT
@@ -76,7 +89,10 @@ const Enrollment = {
   },
 
 
+  // ============================================================
   // Get all enrollments
+  // ============================================================
+
   async getAll() {
     const [rows] = await db.execute(
       `SELECT
@@ -107,7 +123,16 @@ const Enrollment = {
   },
 
 
-  // Delete enrollment
+  // ============================================================
+  // ADMIN: Delete enrollment
+  // ============================================================
+//
+// Existing admin delete functionality.
+//
+// Only enrollment ID is checked here because the route is
+// protected by the admin role middleware.
+//
+
   async delete(id) {
     const [result] = await db.execute(
       `DELETE FROM enrollments
@@ -117,19 +142,35 @@ const Enrollment = {
 
     return result;
   },
-  // Delete student's own enrollment
-async deleteByStudent(id, studentId) {
-  const [result] = await db.execute(
-    `DELETE FROM enrollments
-     WHERE id = ?
-     AND student_id = ?`,
-    [id, studentId]
-  );
 
-  return result;
-},
 
+  // ============================================================
+  // STUDENT: Delete own enrollment
+  // ============================================================
+//
+// CR-006 SECURITY REQUIREMENT:
+//
+// The DELETE query checks BOTH:
+//
+// 1. enrollment ID
+// 2. logged-in student's ID
+//
+// Therefore, a student cannot delete another student's
+// enrollment even if they know the enrollment ID.
+//
+
+  async deleteByStudent(enrollmentId, studentId) {
+    const [result] = await db.execute(
+      `DELETE FROM enrollments
+       WHERE id = ?
+       AND student_id = ?`,
+      [enrollmentId, studentId]
+    );
+
+    return result;
+  },
 
 };
+
 
 module.exports = Enrollment;

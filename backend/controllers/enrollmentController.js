@@ -233,5 +233,5 @@ module.exports = {
   getCourseEnrollments,
   getAllEnrollments,
   deleteEnrollment,
-  cancelMyEnrollment
+  
 };
