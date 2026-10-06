@@ -147,6 +147,53 @@ const getAllEnrollments = async (req, res) => {
   }
 };
 
+// Student cancel own enrollment
+const cancelMyEnrollment = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate enrollment ID
+    if (!id || !Number.isInteger(Number(id))) {
+      return res.status(400).json({
+        message: "Invalid enrollment ID",
+      });
+    }
+
+    // Get logged-in student's ID from JWT/authentication
+    const studentId = req.user.id;
+
+    // Delete only if enrollment belongs to logged-in student
+    const result = await Enrollment.deleteByStudent(
+      Number(id),
+      studentId
+    );
+
+    // This also protects other students' enrollments.
+    // If the enrollment doesn't exist OR belongs to another
+    // student, affectedRows will be 0.
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        message: "Enrollment not found",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Enrollment cancelled successfully",
+    });
+
+  } catch (error) {
+    console.error(
+      "Error cancelling enrollment:",
+      error.message
+    );
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+};
+
+
 
 // Delete enrollment
 const deleteEnrollment = async (req, res) => {
@@ -179,10 +226,12 @@ const deleteEnrollment = async (req, res) => {
 };
 
 
+
 module.exports = {
   enrollInCourse,
   getMyEnrollments,
   getCourseEnrollments,
   getAllEnrollments,
   deleteEnrollment,
+  cancelMyEnrollment
 };

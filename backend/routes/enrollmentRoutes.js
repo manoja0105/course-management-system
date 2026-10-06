@@ -8,6 +8,7 @@ const {
   getCourseEnrollments,
   getAllEnrollments,
   deleteEnrollment,
+  cancelMyEnrollment,
 } = require("../controllers/enrollmentController");
 
 const authMiddleware = require("../middleware/authMiddleware");
@@ -53,6 +54,13 @@ router.get(
   getCourseEnrollments
 );
 
+router.delete(
+  "/my/:id",
+   authMiddleware,
+  roleMiddleware(["student"]),
+  cancelMyEnrollment
+)
+
 
 // Admin (JWT + admin role required)
 // Delete an enrollment
@@ -62,6 +70,8 @@ router.delete(
   roleMiddleware(["admin"]),
   deleteEnrollment
 );
+
+
 
 
 module.exports = router;

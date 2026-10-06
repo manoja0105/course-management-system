@@ -3678,4 +3678,89 @@ textarea.input {
     width: 100%;
   }
 }
+/* =========================================================
+   CR-006 - Student Enrollment Cancellation
+   ========================================================= */
+
+.enrollment-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.enrollment-card-actions .btn {
+  width: 100%;
+}
+
+.enrollment-success {
+  margin-bottom: 20px;
+}
+
+/* Already enrolled state on Course Details */
+.enrolled-notice {
+  width: 100%;
+
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+
+  padding: 14px 16px;
+
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+
+  border-left: 4px solid #16a34a;
+  border-radius: var(--radius-sm);
+}
+
+.enrolled-notice > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 1.2rem;
+}
+
+.enrolled-notice div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.enrolled-notice strong {
+  color: var(--color-success-text);
+}
+
+.enrolled-notice span {
+  font-size: 0.9rem;
+}
+
+/* Cancel button */
+.btn-danger {
+  background-color: var(--color-danger);
+  color: var(--color-white);
+  border-color: var(--color-danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: var(--color-danger-dark);
+  border-color: var(--color-danger-dark);
+}
+
+/* Cancellation loading state */
+.btn-danger:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .enrollment-card-actions {
+    gap: 8px;
+  }
+
+  .enrolled-notice {
+    padding: 12px;
+  }
+}
+
 
