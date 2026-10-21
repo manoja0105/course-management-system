@@ -3930,5 +3930,96 @@ textarea.input {
   }
 
 }
+/* =========================================
+   CR-008 - ADMIN ENROLLMENT SEARCH / FILTERS
+   Append these rules to the existing App.css.
+   ========================================= */
 
+.admin-enrollments-page {
+  padding-bottom: 24px;
+}
+
+.admin-enrollment-filters {
+  display: grid;
+  grid-template-columns:
+    minmax(220px, 2fr)
+    repeat(3, minmax(140px, 1fr));
+  gap: 18px;
+  margin: 24px 0;
+  padding: 22px;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.admin-enrollment-search,
+.admin-enrollment-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.admin-enrollment-search label,
+.admin-enrollment-filter-field label {
+  color: var(--color-text);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.admin-enrollment-search-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.admin-enrollment-search-input > svg {
+  position: absolute;
+  left: 12px;
+  color: var(--color-muted);
+  pointer-events: none;
+}
+
+.admin-enrollment-search-input .input {
+  width: 100%;
+  padding-left: 36px;
+}
+/* CR-008 Pagination Buttons */
+
+.admin-enrollment-page-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-enrollment-page-buttons .btn {
+  border-radius: 8px;
+  padding: 9px 16px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+/* Hover effect */
+.admin-enrollment-page-buttons .btn:hover:not(:disabled) {
+  background-color: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+  transform: translateY(-2px);
+}
+
+/* Click effect */
+.admin-enrollment-page-buttons .btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+/* Disabled buttons */
+.admin-enrollment-page-buttons .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
 

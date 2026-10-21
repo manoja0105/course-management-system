@@ -1,6 +1,6 @@
-const express = require("express");
+// backend/routes/enrollmentRoutes.js
 
-const router = express.Router();
+const express = require("express");
 
 const {
   enrollInCourse,
@@ -11,82 +11,54 @@ const {
   cancelMyEnrollment,
 } = require("../controllers/enrollmentController");
 
-const authMiddleware = require("../middleware/authMiddleware");
-const roleMiddleware = require("../middleware/roleMiddleware");
+const {
+  authenticate,
+  authorizeRoles,
+} = require("../middleware/authMiddleware");
 
+const router = express.Router();
 
-// ============================================================
-// STUDENT ROUTES
-// ============================================================
-
-// Student (JWT + student role required)
-// Enroll in a course
+// Student routes
 router.post(
   "/",
-  authMiddleware,
-  roleMiddleware(["student"]),
+  authenticate,
+  authorizeRoles("STUDENT"),
   enrollInCourse
 );
 
-
-// Student (JWT + student role required)
-// View my enrolled courses
 router.get(
   "/my",
-  authMiddleware,
-  roleMiddleware(["student"]),
+  authenticate,
+  authorizeRoles("STUDENT"),
   getMyEnrollments
 );
 
-
-// Student (JWT + student role required)
-// Cancel my own enrollment
-//
-// IMPORTANT:
-// The student ID is NOT taken from the URL or request body.
-// The backend identifies the logged-in student using req.user.id.
 router.delete(
   "/my/:id",
-  authMiddleware,
-  roleMiddleware(["student"]),
+  authenticate,
+  authorizeRoles("STUDENT"),
   cancelMyEnrollment
 );
 
-
-// ============================================================
-// ADMIN ROUTES
-// ============================================================
-
-// Admin (JWT + admin role required)
-// View all enrollments
+// Admin routes
 router.get(
   "/",
-  authMiddleware,
-  roleMiddleware(["admin"]),
+  authenticate,
+  authorizeRoles("ADMIN"),
   getAllEnrollments
 );
 
-
-// Admin (JWT + admin role required)
-// View students enrolled in a course
-router.get(
-  "/course/:courseId",
-  authMiddleware,
-  roleMiddleware(["admin"]),
-  getCourseEnrollments
-);
-
-
-// Admin (JWT + admin role required)
-// Delete an enrollment
-//
-// Existing admin functionality is preserved.
 router.delete(
   "/:id",
-  authMiddleware,
-  roleMiddleware(["admin"]),
+  authenticate,
+  authorizeRoles("ADMIN"),
   deleteEnrollment
 );
 
+router.get(
+  "/course/:courseId",
+  authenticate,
+  getCourseEnrollments
+);
 
 module.exports = router;
