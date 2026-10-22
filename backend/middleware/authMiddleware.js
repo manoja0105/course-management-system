@@ -1,9 +1,8 @@
+
 const jwt = require("jsonwebtoken");
 
 // Verify JWT token
-const authMiddleware = (req, res, next) => {
-
-  // Get token from Authorization header
+const authenticate = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -12,20 +11,12 @@ const authMiddleware = (req, res, next) => {
     });
   }
 
-  // Extract token (remove "Bearer " prefix)
   const token = authHeader.split(" ")[1];
 
   try {
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET
-    );
-
-	 // Attach verified user info to request object
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
-
     next();
-
   } catch (error) {
     return res.status(401).json({
       message: "Invalid or expired token. Please login again.",
@@ -33,4 +24,27 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-module.exports = authMiddleware;
+// Check user role
+const authorizeRoles = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Please login first.",
+      });
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        message: "You do not have permission to access this resource.",
+      });
+    }
+
+    next();
+  };
+};
+
+module.exports = {
+  authenticate,
+  authMiddleware: authenticate,
+  authorizeRoles,
+};
