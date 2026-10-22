@@ -24,7 +24,7 @@ const authenticate = (req, res, next) => {
   }
 };
 
-// Check user role
+// Check user role (case-insensitive)
 const authorizeRoles = (...roles) => {
   return (req, res, next) => {
     if (!req.user) {
@@ -33,7 +33,12 @@ const authorizeRoles = (...roles) => {
       });
     }
 
-    if (!roles.includes(req.user.role)) {
+    const userRole = String(req.user.role || "").toUpperCase();
+    const allowedRoles = roles.map((role) =>
+      String(role).toUpperCase()
+    );
+
+    if (!allowedRoles.includes(userRole)) {
       return res.status(403).json({
         message: "You do not have permission to access this resource.",
       });
