@@ -1,66 +1,42 @@
-
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
+
 
 // Middleware
 app.use(cors());
+
+
+// Parse JSON request bodies
 app.use(express.json());
 
-// Handle invalid or empty JSON requests
-app.use((err, req, res, next) => {
-    if (
-        err instanceof SyntaxError &&
-        err.status === 400 &&
-        "body" in err
-    ) {
-        console.error(
-            "Invalid JSON request:",
-            req.method,
-            req.originalUrl
-        );
 
-        return res.status(400).json({
-            message:
-                "Invalid JSON body. Check the Postman Body and Headers settings."
-        });
-    }
-
-    next(err);
-});
-
-// API routes
+// API Routes
 const authRoutes = require("./routes/authRoutes");
-const { authenticate } = require("./middleware/authMiddleware");
+const authMiddleware = require("./middleware/authMiddleware");
 const userRoutes = require("./routes/userRoutes");
 const courseRoutes = require("./routes/courseRoutes");
 const enrollmentRoutes = require("./routes/enrollmentRoutes");
+const reportRoutes = require("./routes/reportRoutes");
 
-// Public authentication routes
+// Public auth routes (login)
 app.use("/api/auth", authRoutes);
 
-// Course routes
+// Course routes - public GET, protected POST/PUT/DELETE (auth per-route)
 app.use("/api/courses", courseRoutes);
 
-// Protected user routes
-app.use("/api/users", authenticate, userRoutes);
+// Protected routes - require valid JWT
+app.use("/api/users", authMiddleware, userRoutes);
+app.use("/api/enrollments", authMiddleware, enrollmentRoutes);
 
-// Enrollment routes
-app.use("/api/enrollments", enrollmentRoutes);
+// CR-009 - Reports (role checked per route)
+app.use("/api/reports", authMiddleware, reportRoutes);
 
-// Handle other server errors
-app.use((err, req, res, next) => {
-    console.error("Server error:", err);
 
-    res.status(500).json({
-        message: "Internal server error"
-    });
-});
-
-// Start server
+// Start Server
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
