@@ -1,5 +1,6 @@
 
 const express = require("express");
+
 const router = express.Router();
 
 const {
@@ -11,37 +12,61 @@ const {
   getStats,
 } = require("../controllers/courseController");
 
-const {
-  authenticate,
-  authorizeRoles,
-} = require("../middleware/authMiddleware");
+const authMiddleware = require("../middleware/authMiddleware");
+const roleMiddleware = require("../middleware/roleMiddleware");
 
+
+// ======================================================
 // Public routes
-router.get("/stats", getStats);
-router.get("/", getAllCourses);
-router.get("/:id", getCourseById);
+// ======================================================
 
+// Statistics
+router.get(
+  "/stats",
+  getStats
+);
+
+// Get all courses
+router.get(
+  "/",
+  getAllCourses
+);
+
+// Get one course
+router.get(
+  "/:id",
+  getCourseById
+);
+
+
+// ======================================================
 // Admin-only routes
+// ======================================================
+
+// Create course
 router.post(
   "/",
-  authenticate,
-  authorizeRoles("ADMIN"),
+  authMiddleware,
+  roleMiddleware(["admin"]),
   createCourse
 );
 
+// Update course
 router.put(
   "/:id",
-  authenticate,
-  authorizeRoles("ADMIN"),
+  authMiddleware,
+  roleMiddleware(["admin"]),
   updateCourse
 );
 
+// Delete course
 router.delete(
   "/:id",
-  authenticate,
-  authorizeRoles("ADMIN"),
+  authMiddleware,
+  roleMiddleware(["admin"]),
   deleteCourse
 );
 
+
 module.exports = router;
- 
+

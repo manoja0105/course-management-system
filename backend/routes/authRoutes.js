@@ -1,18 +1,20 @@
-
 const express = require("express");
+
 const router = express.Router();
 
-const authController = require("../controllers/authController");
-const { authenticate } = require("../middleware/authMiddleware");
+const { login } = require("../controllers/authController");
 
-// Login route
-router.post("/login", authController.login);
+const authMiddleware = require("../middleware/authMiddleware");
 
-// Protected test route
-router.get("/test", authenticate, (req, res) => {
+// POST /api/auth/login
+router.post("/login", login);
+
+
+// Temporary protected route for testing
+router.get("/test", authMiddleware, (req, res) => {
   res.json({
     message: "Authentication successful",
-    user: req.user,
+    user: req.user
   });
 });
 

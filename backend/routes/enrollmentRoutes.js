@@ -1,64 +1,56 @@
-// backend/routes/enrollmentRoutes.js
 
 const express = require("express");
+const router = express.Router();
 
 const {
   enrollInCourse,
   getMyEnrollments,
   getCourseEnrollments,
   getAllEnrollments,
-  deleteEnrollment,
-  cancelMyEnrollment,
+  deleteEnrollment
 } = require("../controllers/enrollmentController");
 
-const {
-  authenticate,
-  authorizeRoles,
-} = require("../middleware/authMiddleware");
+const authMiddleware = require("../middleware/authMiddleware");
+const roleMiddleware = require("../middleware/roleMiddleware");
 
-const router = express.Router();
-
-// Student routes
+// Student: enroll in a course
 router.post(
   "/",
-  authenticate,
-  authorizeRoles("STUDENT"),
+  authMiddleware,
+  roleMiddleware(["student"]),
   enrollInCourse
 );
 
+// Student: view own courses
 router.get(
   "/my",
-  authenticate,
-  authorizeRoles("STUDENT"),
+  authMiddleware,
+  roleMiddleware(["student"]),
   getMyEnrollments
 );
 
-router.delete(
-  "/my/:id",
-  authenticate,
-  authorizeRoles("STUDENT"),
-  cancelMyEnrollment
-);
-
-// Admin routes
+// Admin: paginated enrollment list
 router.get(
   "/",
-  authenticate,
-  authorizeRoles("ADMIN"),
+  authMiddleware,
+  roleMiddleware(["admin"]),
   getAllEnrollments
 );
 
-router.delete(
-  "/:id",
-  authenticate,
-  authorizeRoles("ADMIN"),
-  deleteEnrollment
-);
-
+// Admin: list students in one course
 router.get(
   "/course/:courseId",
-  authenticate,
+  authMiddleware,
+  roleMiddleware(["admin"]),
   getCourseEnrollments
+);
+
+// Admin: delete an enrollment
+router.delete(
+  "/:id",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  deleteEnrollment
 );
 
 module.exports = router;
