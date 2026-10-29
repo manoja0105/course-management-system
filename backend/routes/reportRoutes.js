@@ -1,3 +1,4 @@
+
 const express = require("express");
 const router = express.Router();
 
@@ -6,22 +7,24 @@ const {
   getMyReport,
 } = require("../controllers/reportController");
 
-const authMiddleware = require("../middleware/authMiddleware");
-const roleMiddleware = require("../middleware/roleMiddleware");
+const {
+  authenticate,
+  authorizeRoles,
+} = require("../middleware/authMiddleware");
 
 // Admin only: GET /api/reports/overview
 router.get(
   "/overview",
-  authMiddleware,
-  roleMiddleware(["admin"]),
+  authenticate,
+  authorizeRoles("ADMIN"),
   getAdminOverview
 );
 
 // Student only: GET /api/reports/my
 router.get(
   "/my",
-  authMiddleware,
-  roleMiddleware(["student"]),
+  authenticate,
+  authorizeRoles("STUDENT"),
   getMyReport
 );
 
