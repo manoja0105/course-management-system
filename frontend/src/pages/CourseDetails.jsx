@@ -7,7 +7,10 @@ import {
 
 import {
   FaChartBar,
+  FaCheckCircle,
+  FaClock,
   FaGraduationCap,
+  FaPaperPlane,
   FaShoppingCart,
   FaSignInAlt
 } from "react-icons/fa";
@@ -22,6 +25,22 @@ import {
 
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+
+
+// Format a date for display
+const formatDate = (value) => {
+
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? "-"
+    : date.toLocaleDateString();
+
+};
 
 
 function CourseDetails() {
@@ -45,7 +64,12 @@ function CourseDetails() {
 
   const [enrolling, setEnrolling] = useState(false);
 
-  const [enrolled, setEnrolled] = useState(false);
+  // CR-011: this student's request for this course
+  // null | { status, decision_note, reviewed_at }
+  const [myRequest, setMyRequest] = useState(null);
+
+  const enrollmentStatus = myRequest?.status || null;
+
 
 
   // ====================================================
@@ -161,8 +185,9 @@ function CourseDetails() {
                 : [];
 
 
-            const isCurrentlyEnrolled =
-              myEnrollments.some(
+            // CR-011: find the request (any status)
+            const existingRequest =
+              myEnrollments.find(
                 (enrollment) =>
                   Number(
                     enrollment.course_id
@@ -170,8 +195,8 @@ function CourseDetails() {
               );
 
 
-            setEnrolled(
-              isCurrentlyEnrolled
+            setMyRequest(
+              existingRequest || null
             );
 
           } catch (enrollmentError) {
@@ -181,13 +206,13 @@ function CourseDetails() {
               enrollmentError.message
             );
 
-            setEnrolled(false);
+            setMyRequest(null);
 
           }
 
         } else {
 
-          setEnrolled(false);
+          setMyRequest(null);
 
         }
 
@@ -216,7 +241,37 @@ function CourseDetails() {
 
 
   // ====================================================
-  // ENROLL
+  // REFRESH COURSE (capacity)
+  // ====================================================
+
+  const refreshCourse = async () => {
+
+    try {
+
+      const courseResponse =
+        await api.get(
+          `/courses/${id}`
+        );
+
+
+      setCourse(
+        courseResponse.data.course
+      );
+
+    } catch (refreshError) {
+
+      console.error(
+        "Failed to refresh course availability:",
+        refreshError.message
+      );
+
+    }
+
+  };
+
+
+  // ====================================================
+  // REQUEST ENROLLMENT (CR-011)
   // ====================================================
 
   const handleEnroll = async () => {
@@ -244,92 +299,79 @@ function CourseDetails() {
       );
 
 
-      // Student is now enrolled
-      setEnrolled(true);
+      // The request is now waiting for an administrator.
+      // The student is NOT enrolled yet.
+      setMyRequest({
+        status: "pending",
+        decision_note: null,
+        reviewed_at: null,
+      });
 
 
-      // ------------------------------------------------
-      // Refresh course capacity
-      // ------------------------------------------------
-
-      try {
-
-        const courseResponse =
-          await api.get(
-            `/courses/${id}`
-          );
-
-
-        setCourse(
-          courseResponse.data.course
-        );
-
-      } catch (refreshError) {
-
-        console.error(
-          "Failed to refresh course availability:",
-          refreshError.message
-        );
-
-      }
+      // Pending requests do not use a seat,
+      // but refresh anyway to stay accurate.
+      await refreshCourse();
 
     } catch (error) {
 
-      // ------------------------------------------------
-      // COURSE FULL
-      // ------------------------------------------------
+      const data =
+        error.response?.data;
 
-      if (
-        error.response?.status === 409 &&
-        error.response?.data?.message
-          ?.toLowerCase()
-          .includes("full")
-      ) {
-
-        setError(
-          error.response.data.message
-        );
-
-        // Refresh availability because
-        // another student may have taken
-        // the final seat.
-
-        try {
-
-          const courseResponse =
-            await api.get(
-              `/courses/${id}`
-            );
+      const message =
+        data?.message || "";
 
 
-          setCourse(
-            courseResponse.data.course
-          );
+      if (error.response?.status === 409) {
 
-        } catch (refreshError) {
+        // ------------------------------------------------
+        // ALREADY PENDING / ALREADY APPROVED
+        // ------------------------------------------------
 
-          console.error(
-            "Failed to refresh course availability:",
-            refreshError.message
-          );
+        if (
+          data?.currentStatus === "pending" ||
+          data?.currentStatus === "approved"
+        ) {
+
+          setMyRequest({
+            status: data.currentStatus,
+            decision_note: null,
+            reviewed_at: null,
+          });
+
+          setError(message);
 
         }
 
-      }
+        // ------------------------------------------------
+        // COURSE FULL
+        // ------------------------------------------------
 
-      // ------------------------------------------------
-      // ALREADY ENROLLED
-      // ------------------------------------------------
+        else if (
+          message
+            .toLowerCase()
+            .includes("full")
+        ) {
 
-      else if (
-        error.response?.status === 409
-      ) {
+          setError(message);
 
-        setEnrolled(true);
+          // Refresh availability because
+          // seats may have changed.
+          await refreshCourse();
 
-        setError(
-          "You are already enrolled in this course. You can see it in My Enrollments."
-        );
+        }
+
+        // ------------------------------------------------
+        // OTHER CONFLICT
+        // ------------------------------------------------
+
+        else {
+
+          setError(
+            message ||
+            "Could not submit the request. Please try again."
+          );
+
+        }
 
       }
 
@@ -340,8 +382,8 @@ function CourseDetails() {
       else {
 
         setError(
-          error.response?.data?.message ||
-          "Enrollment failed. Please try again."
+          message ||
+          "Request failed. Please try again."
         );
 
       }
@@ -693,22 +735,24 @@ function CourseDetails() {
                 FULL COURSE NOTICE
             ================================================== */}
 
-            {isFull && !enrolled && (
+            {isFull &&
+              (enrollmentStatus === null ||
+                enrollmentStatus === "rejected") && (
 
               <div className="notice">
 
                 <p className="error">
 
                   <strong>
-                    Course Full
+                    Course At Capacity
                   </strong>
                 </p>
 
                 <p>
 
-                  This course has reached its
-                  maximum enrollment capacity.
-                  No seats are currently available.
+                  The course has no approved seats available right now.
+                  You may still request enrollment, but approval depends on
+                  an available seat.
 
                 </p>
 
@@ -768,7 +812,7 @@ function CourseDetails() {
                   <p>
 
                     Please login as a student
-                    to enroll in this course.
+                    to request enrollment in this course.
 
                   </p>
 
@@ -784,7 +828,7 @@ function CourseDetails() {
 
                     <FaSignInAlt />
 
-                    Login to Enroll
+                    Login to Request Enrollment
 
                   </Link>
 
@@ -803,72 +847,139 @@ function CourseDetails() {
                 <>
 
                   {/* ----------------------------------------------
-                      ALREADY ENROLLED
+                      CR-011: APPROVED = enrolled
                   ---------------------------------------------- */}
 
-                  {enrolled ? (
+                  {enrollmentStatus === "approved" ? (
 
-                    <div className="notice">
+                    <div className="request-status-box status-box-approved">
 
                       <p className="success">
+
+                        <FaCheckCircle />{" "}
 
                         You are currently
                         enrolled in this course.
 
                       </p>
 
+                      {myRequest.reviewed_at && (
 
-                      <Link
-                        to="/my-enrollments"
-                        className="btn btn-primary"
-                      >
+                        <span className="decision-meta">
 
-                        <FaGraduationCap />
+                          Approved on{" "}
+                          {formatDate(
+                            myRequest.reviewed_at
+                          )}
 
-                        My Enrollments
+                        </span>
 
-                      </Link>
+                      )}
 
                     </div>
 
-                  ) : isFull ? (
+                  ) : enrollmentStatus === "pending" ? (
 
                     /* --------------------------------------------
-                       COURSE FULL
+                       CR-011: PENDING
                     -------------------------------------------- */
 
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-lg"
-                      disabled
-                    >
+                    <div className="request-status-box status-box-pending">
 
-                      <FaShoppingCart />
+                      <p>
 
-                      Course Full
+                        <span className="status-badge status-pending">
 
-                    </button>
+                          <FaClock />{" "}
+
+                          Request Pending Approval
+
+                        </span>
+
+                      </p>
+
+                      <p>
+
+                        Your enrollment request has been sent.
+                        An administrator will approve or reject
+                        it. No seat is reserved until it is
+                        approved.
+
+                      </p>
+
+                    </div>
 
                   ) : (
 
-                    /* --------------------------------------------
-                       AVAILABLE
-                    -------------------------------------------- */
+                    <>
 
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-lg"
-                      onClick={handleEnroll}
-                      disabled={enrolling}
-                    >
+                      {/* ------------------------------------------
+                          CR-011: REJECTED (reason + decision date)
+                      ------------------------------------------ */}
 
-                      <FaShoppingCart />
+                      {enrollmentStatus === "rejected" && (
 
-                      {enrolling
-                        ? "Enrolling..."
-                        : "Enroll Now"}
+                        <div className="request-status-box status-box-rejected">
 
-                    </button>
+                          <p>
+
+                            <span className="status-badge status-rejected">
+                              Request Rejected
+                            </span>
+
+                          </p>
+
+                          {myRequest.decision_note && (
+
+                            <p className="decision-note">
+
+                              <strong>Reason:</strong>{" "}
+
+                              {myRequest.decision_note}
+
+                            </p>
+
+                          )}
+
+                          <span className="decision-meta">
+
+                            Decision date:{" "}
+
+                            {formatDate(
+                              myRequest.reviewed_at
+                            )}
+
+                          </span>
+
+                          <p>
+
+                            You can submit a new request.
+
+                          </p>
+
+                        </div>
+
+                      )}
+
+
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-lg"
+                        onClick={handleEnroll}
+                        disabled={enrolling}
+                      >
+
+                        <FaPaperPlane />
+
+                        {enrolling
+                          ? "Submitting request..."
+                          : enrollmentStatus === "rejected"
+                            ? "Request Enrollment Again"
+                            : "Request Enrollment"}
+
+                      </button>
+
+                    </>
 
                   )}
 

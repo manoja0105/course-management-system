@@ -6,16 +6,16 @@ const db = require("../config/db");
  * Every statistic is calculated by MySQL using aggregation
  * (COUNT / SUM / MIN / MAX / GROUP BY). No query is executed
  * inside a loop, so the number of queries is fixed
- * (6 for admin, 2 for student) no matter how many courses exist.
+ * (7 for admin, 3 for student) no matter how many courses exist.
  *
- * CR-011 DECISION (pending enrollments):
- * The current schema has no enrollment status column, so every
- * enrollment row is counted. If CR-011 adds a status column,
- * only APPROVED enrollments must be counted in reports. To do that,
- * change COUNTED_ENROLLMENT below to "e.status = 'approved'"
- * (single place - used by every query in this file).
+ * CR-011 (approval workflow):
+ * Only APPROVED enrollments are "confirmed". Pending and rejected
+ * requests are never counted in totals, categories, top courses or
+ * student statistics. COUNTED_ENROLLMENT is the single place that
+ * defines this rule (used by every confirmed-enrollment query).
+ * Pending requests are counted separately (pendingRequests).
  */
-const COUNTED_ENROLLMENT = "1 = 1";
+const COUNTED_ENROLLMENT = "e.status = 'approved'";
 
 // Convert any DB value (string / BigInt / null) into a safe number.
 const toNumber = (value) => {
@@ -35,6 +35,7 @@ const Report = {
       [noEnrollmentRows],
       [categoryRows],
       [topCourseRows],
+      [pendingRows],
     ] = await Promise.all([
       // 1. Total courses
       db.execute(`SELECT COUNT(*) AS total FROM courses`),
@@ -99,6 +100,13 @@ const Report = {
          ORDER BY enrollment_count DESC, c.title ASC, c.id ASC
          LIMIT 5`
       ),
+
+      // 9. CR-011: requests waiting for an administrator
+      db.execute(
+        `SELECT COUNT(*) AS total
+         FROM enrollments
+         WHERE status = 'pending'`
+      ),
     ]);
 
     const enrollment = enrollmentRows[0] || {};
@@ -106,7 +114,9 @@ const Report = {
     return {
       totalCourses: toNumber(courseRows[0]?.total),
       totalStudents: toNumber(studentRows[0]?.total),
+      // confirmed (approved) enrollments only
       totalEnrollments: toNumber(enrollment.total_enrollments),
+      pendingRequests: toNumber(pendingRows[0]?.total),
       studentsWithEnrollments: toNumber(
         enrollment.students_with_enrollments
       ),
@@ -134,7 +144,7 @@ const Report = {
   // never from the URL or request body.
   // ======================================================
   async getStudentReport(studentId) {
-    const [[summaryRows], [recentRows]] = await Promise.all([
+    const [[summaryRows], [recentRows], [pendingRows]] = await Promise.all([
       db.execute(
         `SELECT
            COUNT(*)                   AS enrolled_courses,
@@ -156,13 +166,23 @@ const Report = {
            c.id AS course_id,
            c.title,
            c.category,
-           c.level
+           c.level,
+           e.status,
+           e.reviewed_at
          FROM enrollments e
          JOIN courses c ON c.id = e.course_id
          WHERE e.student_id = ?
-           AND ${COUNTED_ENROLLMENT}
          ORDER BY e.enrolled_at DESC, e.id DESC
          LIMIT 5`,
+        [studentId]
+      ),
+
+      // CR-011: the student's requests that are still waiting
+      db.execute(
+        `SELECT COUNT(*) AS total
+         FROM enrollments
+         WHERE student_id = ?
+           AND status = 'pending'`,
         [studentId]
       ),
     ]);
@@ -170,14 +190,19 @@ const Report = {
     const summary = summaryRows[0] || {};
 
     return {
+      // approved enrollments only
       enrolledCourses: toNumber(summary.enrolled_courses),
+      pendingRequests: toNumber(pendingRows[0]?.total),
       distinctCategories: toNumber(summary.distinct_categories),
       earliestEnrollmentDate: summary.earliest_enrollment || null,
       latestEnrollmentDate: summary.latest_enrollment || null,
       totalEnrollmentValue: toNumber(summary.total_value),
+      // recent REQUESTS of every status (each row carries its status)
       recentEnrollments: recentRows.map((row) => ({
         id: row.id,
         enrolledAt: row.enrolled_at,
+        status: row.status,
+        reviewedAt: row.reviewed_at,
         courseId: row.course_id,
         title: row.title,
         category: row.category,

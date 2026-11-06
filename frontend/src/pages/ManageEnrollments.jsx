@@ -1,60 +1,86 @@
-// frontend/src/pages/ManageEnrollments.jsx
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { FaSearch, FaSyncAlt, FaTrash } from "react-icons/fa";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { FaCheck, FaTimes, FaTrash } from "react-icons/fa";
 
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
-const DEFAULT_PAGINATION = {
-  page: 1,
-  limit: 20,
-  total: 0,
-  totalPages: 0,
+// CR-011: status tabs (default view = requests waiting for approval)
+const STATUS_TABS = [
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
+  { value: "all", label: "All" }
+];
+
+const STATUS_LABELS = {
+  pending: "Pending",
+  approved: "Approved",
+  rejected: "Rejected"
 };
 
-function AdminEnrollments() {
-  const [enrollments, setEnrollments] = useState([]);
-  const [courses, setCourses] = useState([]);
-  const [pagination, setPagination] = useState(DEFAULT_PAGINATION);
+const MAX_REASON_LENGTH = 500;
 
-  const [search, setSearch] = useState("");
-  const [courseId, setCourseId] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [sort, setSort] = useState("date");
-  const [order, setOrder] = useState("desc");
-  const [limit, setLimit] = useState("20");
+const INITIAL_FILTERS = {
+  q: "",
+  courseId: "",
+  status: "pending",
+  from: "",
+  to: "",
+  sort: "date",
+  order: "desc",
+  limit: "20"
+};
+
+function ManageEnrollments() {
+  const [courses, setCourses] = useState([]);
+  // /admin/enrollments?status=pending opens the matching tab
+  const [searchParams] = useSearchParams();
+
+  const [filters, setFilters] = useState(() => {
+    const statusParam = searchParams.get("status");
+
+    return STATUS_TABS.some((tab) => tab.value === statusParam)
+      ? { ...INITIAL_FILTERS, status: statusParam }
+      : INITIAL_FILTERS;
+  });
+  const [searchInput, setSearchInput] = useState("");
   const [page, setPage] = useState(1);
 
-  const [loading, setLoading] = useState(true);
-  const [deletingId, setDeletingId] = useState(null);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [enrollments, setEnrollments] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0
+  });
 
-  // Load courses for the course filter.
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // CR-011: approve / reject
+  const [processingId, setProcessingId] = useState(null);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [actionError, setActionError] = useState("");
+
+  // Load courses for the dropdown.
   useEffect(() => {
     let active = true;
 
     const loadCourses = async () => {
       try {
         const response = await api.get("/courses");
-        const data = response.data;
-
-        const list = Array.isArray(data)
-          ? data
-          : Array.isArray(data?.courses)
-            ? data.courses
-            : [];
 
         if (active) {
-          setCourses(list);
+          setCourses(response.data.courses || []);
         }
-      } catch {
-        if (active) {
-          setCourses([]);
-        }
+      } catch (err) {
+        console.error("Could not load courses:", err.message);
       }
     };
 
@@ -65,145 +91,192 @@ function AdminEnrollments() {
     };
   }, []);
 
-  // Fetch only the requested page from the backend.
+  // Debounce student search.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const value = searchInput.trim();
+
+      setFilters((previous) =>
+        previous.q === value
+          ? previous
+          : { ...previous, q: value }
+      );
+
+      setPage(1);
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const updateFilter = (name, value) => {
+    setSuccess("");
+    setActionError("");
+    setRejectingId(null);
+    setRejectReason("");
+    setFilters((previous) => ({
+      ...previous,
+      [name]: value
+    }));
+    setPage(1);
+  };
+
+  // Retrieve only the requested page from the backend.
   const loadEnrollments = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit,
-        sort,
-        order,
-      });
+      const params = { ...filters, page };
 
-      if (search.trim()) {
-        params.set("q", search.trim());
-      }
-
-      if (courseId) {
-        params.set("courseId", courseId);
-      }
-
-      if (from) {
-        params.set("from", from);
-      }
-
-      if (to) {
-        params.set("to", to);
-      }
-
-      const response = await api.get(
-        `/enrollments?${params.toString()}`
-      );
-
-      const data = response.data || {};
-
-      setEnrollments(
-        Array.isArray(data.enrollments)
-          ? data.enrollments
-          : []
-      );
-
-      setPagination(
-        data.pagination || {
-          page,
-          limit: Number(limit),
-          total: 0,
-          totalPages: 0,
+      Object.keys(params).forEach((key) => {
+        if (params[key] === "") {
+          delete params[key];
         }
-      );
-    } catch (requestError) {
-      setEnrollments([]);
-
-      setPagination({
-        page,
-        limit: Number(limit),
-        total: 0,
-        totalPages: 0,
       });
 
+      // "all" = no status filter
+      if (params.status === "all") {
+        delete params.status;
+      }
+
+      params.limit = Number(filters.limit);
+
+      const response = await api.get("/enrollments", { params });
+      const records = response.data.enrollments || [];
+      const meta = response.data.pagination;
+
+      if (!meta) {
+        throw new Error("Pagination metadata is missing.");
+      }
+
+      // Correct the page if deletion emptied it.
+      if (page > 1 && records.length === 0) {
+        if (meta.total === 0) {
+          setPage(1);
+        } else {
+          const lastValidPage = Math.ceil(
+            meta.total / Number(filters.limit)
+          );
+
+          setPage(Math.min(page - 1, lastValidPage));
+        }
+
+        return;
+      }
+
+      setEnrollments(records);
+      setPagination(meta);
+    } catch (err) {
+      setEnrollments([]);
       setError(
-        requestError.response?.data?.message ||
-          "Failed to load enrollments. Please try again."
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to load enrollments."
       );
     } finally {
       setLoading(false);
     }
-  }, [page, limit, sort, order, search, courseId, from, to]);
+  }, [filters, page, reloadKey]);
 
   useEffect(() => {
     loadEnrollments();
   }, [loadEnrollments]);
 
-  // Reset to page 1 when a filter or sorting option changes.
-  const changeFilter = (setter, value) => {
-    setter(value);
-    setPage(1);
-    setNotice("");
+  // CR-011: approve or reject a pending request
+  const reviewRequest = async (enrollment, status, reason = "") => {
+    setError("");
+    setSuccess("");
+    setActionError("");
+    setProcessingId(enrollment.id);
+
+    try {
+      const response = await api.patch(
+        `/enrollments/${enrollment.id}/status`,
+        { status, reason }
+      );
+
+      setSuccess(response.data.message);
+      setRejectingId(null);
+      setRejectReason("");
+      setReloadKey((previous) => previous + 1);
+    } catch (err) {
+      setActionError(
+        err.response?.data?.message ||
+        "Could not update the request."
+      );
+
+      // The list may be out of date (already processed / course full)
+      if (err.response?.status === 409) {
+        setRejectingId(null);
+        setRejectReason("");
+        setReloadKey((previous) => previous + 1);
+      }
+    } finally {
+      setProcessingId(null);
+    }
   };
 
-  const firstRecord =
-    pagination.total === 0
-      ? 0
-      : (pagination.page - 1) * pagination.limit + 1;
+  const handleApprove = (enrollment) => {
+    const student =
+      enrollment.full_name || enrollment.username || "this student";
 
-  const lastRecord = Math.min(
-    pagination.page * pagination.limit,
-    pagination.total
-  );
+    const confirmed = window.confirm(
+      `Approve ${student}'s request for "${enrollment.title}"?`
+    );
 
-  const pageNumbers = useMemo(
-    () => ({
-      canGoBack: pagination.page > 1,
-      canGoForward:
-        pagination.totalPages > 0 &&
-        pagination.page < pagination.totalPages,
-    }),
-    [pagination.page, pagination.totalPages]
-  );
+    if (!confirmed) return;
 
-  // Delete an enrollment and refresh the results.
-  const handleDelete = async (enrollment) => {
-    const studentName =
-      enrollment.full_name ||
-      enrollment.username ||
-      "this student";
+    reviewRequest(enrollment, "approved");
+  };
 
-    const courseName =
-      enrollment.course_title || "this course";
+  const openReject = (enrollment) => {
+    setActionError("");
+    setSuccess("");
+    setRejectingId(enrollment.id);
+    setRejectReason("");
+  };
 
-    if (
-      !window.confirm(
-        `Delete ${studentName}'s enrollment in "${courseName}"?`
-      )
-    ) {
+  const closeReject = () => {
+    setRejectingId(null);
+    setRejectReason("");
+  };
+
+  const submitReject = (enrollment) => {
+    const reason = rejectReason.trim();
+
+    if (reason === "") {
+      setActionError("Please enter a rejection reason.");
       return;
     }
 
-    setDeletingId(enrollment.id);
+    reviewRequest(enrollment, "rejected", reason);
+  };
+
+  const handleDelete = async (enrollment) => {
+    const student =
+      enrollment.full_name || enrollment.username || "this student";
+
+    const confirmed = window.confirm(
+      `Remove ${student} from "${enrollment.title}"?`
+    );
+
+    if (!confirmed) return;
+
     setError("");
-    setNotice("");
+    setSuccess("");
 
     try {
-      await api.delete(`/enrollments/${enrollment.id}`);
-
-      // Move back one page if deleting the only row on this page.
-      if (enrollments.length === 1 && page > 1) {
-        setPage((currentPage) => currentPage - 1);
-      } else {
-        await loadEnrollments();
-      }
-
-      setNotice("Enrollment deleted successfully.");
-    } catch (deleteError) {
-      setError(
-        deleteError.response?.data?.message ||
-          "Failed to delete the enrollment. Please try again."
+      const response = await api.delete(
+        `/enrollments/${enrollment.id}`
       );
-    } finally {
-      setDeletingId(null);
+
+      setSuccess(response.data.message);
+      setReloadKey((previous) => previous + 1);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+        "Could not delete the enrollment."
+      );
     }
   };
 
@@ -214,205 +287,204 @@ function AdminEnrollments() {
 
     return Number.isNaN(date.getTime())
       ? "-"
-      : date.toLocaleDateString("en-GB");
+      : date.toLocaleDateString();
   };
+
+  const total = pagination.total;
+  const totalPages = pagination.totalPages;
+
+  const start =
+    total === 0 ? 0 : (page - 1) * pagination.limit + 1;
+
+  const end = Math.min(page * pagination.limit, total);
 
   return (
     <>
       <Navbar />
 
-      <main className="container admin-enrollments-page">
+      <main className="container">
         <div className="page-header">
           <div>
             <h1>Manage Enrollments</h1>
             <p className="page-subtitle">
-              Search, filter, sort, and manage student course enrollments.
+              Review enrollment requests, then search, filter, sort and
+              manage student enrollments.
             </p>
           </div>
-
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={loadEnrollments}
-            disabled={loading}
-          >
-            <FaSyncAlt /> Refresh
-          </button>
         </div>
 
-        <section
-          className="admin-enrollment-filters"
-          aria-label="Enrollment filters"
-        >
-          <div className="admin-enrollment-search">
-            <label htmlFor="enrollmentSearch">
-              Search student
-            </label>
+        {/* CR-011: status tabs */}
+        <div className="status-tabs" role="group" aria-label="Status">
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              className={`status-tab${
+                filters.status === tab.value ? " active" : ""
+              }`}
+              onClick={() => updateFilter("status", tab.value)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-            <div className="admin-enrollment-search-input">
-              <FaSearch aria-hidden="true" />
-
+        <section className="section-card cr008-filters">
+          <div className="cr008-filter-grid">
+            <div className="form-group">
+              <label htmlFor="enrollmentSearch">
+                Search student
+              </label>
               <input
                 id="enrollmentSearch"
-                type="search"
                 className="input"
-                value={search}
-                placeholder="Student name or username"
+                type="search"
+                placeholder="Name or username"
+                value={searchInput}
                 onChange={(event) =>
-                  changeFilter(setSearch, event.target.value)
+                  setSearchInput(event.target.value)
                 }
               />
             </div>
-          </div>
 
-          <div className="admin-enrollment-filter-field">
-            <label htmlFor="enrollmentCourse">Course</label>
+            <div className="form-group">
+              <label htmlFor="courseFilter">Course</label>
+              <select
+                id="courseFilter"
+                className="input"
+                value={filters.courseId}
+                onChange={(event) =>
+                  updateFilter("courseId", event.target.value)
+                }
+              >
+                <option value="">All courses</option>
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.title}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            <select
-              id="enrollmentCourse"
-              className="input"
-              value={courseId}
-              onChange={(event) =>
-                changeFilter(setCourseId, event.target.value)
-              }
-            >
-              <option value="">All courses</option>
+            <div className="form-group">
+              <label htmlFor="enrollmentFrom">From date</label>
+              <input
+                id="enrollmentFrom"
+                className="input"
+                type="date"
+                value={filters.from}
+                max={filters.to || undefined}
+                onChange={(event) =>
+                  updateFilter("from", event.target.value)
+                }
+              />
+            </div>
 
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>
-                  {course.title}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className="form-group">
+              <label htmlFor="enrollmentTo">To date</label>
+              <input
+                id="enrollmentTo"
+                className="input"
+                type="date"
+                value={filters.to}
+                min={filters.from || undefined}
+                onChange={(event) =>
+                  updateFilter("to", event.target.value)
+                }
+              />
+            </div>
 
-          <div className="admin-enrollment-filter-field">
-            <label htmlFor="enrollmentFrom">Enrolled from</label>
+            <div className="form-group">
+              <label htmlFor="enrollmentSort">Sort by</label>
+              <select
+                id="enrollmentSort"
+                className="input"
+                value={filters.sort}
+                onChange={(event) =>
+                  updateFilter("sort", event.target.value)
+                }
+              >
+                <option value="date">Enrollment date</option>
+                <option value="student">Student name</option>
+                <option value="course">Course name</option>
+              </select>
+            </div>
 
-            <input
-              id="enrollmentFrom"
-              type="date"
-              className="input"
-              value={from}
-              max={to || undefined}
-              onChange={(event) =>
-                changeFilter(setFrom, event.target.value)
-              }
-            />
-          </div>
+            <div className="form-group">
+              <label htmlFor="enrollmentOrder">Sort order</label>
+              <select
+                id="enrollmentOrder"
+                className="input"
+                value={filters.order}
+                onChange={(event) =>
+                  updateFilter("order", event.target.value)
+                }
+              >
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+              </select>
+            </div>
 
-          <div className="admin-enrollment-filter-field">
-            <label htmlFor="enrollmentTo">Enrolled to</label>
+            <div className="form-group">
+              <label htmlFor="enrollmentLimit">Records per page</label>
+              <select
+                id="enrollmentLimit"
+                className="input"
+                value={filters.limit}
+                onChange={(event) =>
+                  updateFilter("limit", event.target.value)
+                }
+              >
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
 
-            <input
-              id="enrollmentTo"
-              type="date"
-              className="input"
-              value={to}
-              min={from || undefined}
-              onChange={(event) =>
-                changeFilter(setTo, event.target.value)
-              }
-            />
-          </div>
-
-          <div className="admin-enrollment-filter-field">
-            <label htmlFor="enrollmentSort">Sort by</label>
-
-            <select
-              id="enrollmentSort"
-              className="input"
-              value={sort}
-              onChange={(event) =>
-                changeFilter(setSort, event.target.value)
-              }
-            >
-              <option value="date">Enrollment date</option>
-              <option value="student">Student name</option>
-              <option value="course">Course name</option>
-            </select>
-          </div>
-
-          <div className="admin-enrollment-filter-field">
-            <label htmlFor="enrollmentOrder">Order</label>
-
-            <select
-              id="enrollmentOrder"
-              className="input"
-              value={order}
-              onChange={(event) =>
-                changeFilter(setOrder, event.target.value)
-              }
-            >
-              <option value="desc">Descending</option>
-              <option value="asc">Ascending</option>
-            </select>
-          </div>
-
-          <div className="admin-enrollment-filter-field">
-            <label htmlFor="enrollmentLimit">Rows per page</label>
-
-            <select
-              id="enrollmentLimit"
-              className="input"
-              value={limit}
-              onChange={(event) =>
-                changeFilter(setLimit, event.target.value)
-              }
-            >
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
+            <div className="form-group">
+              <label>Reset filters</label>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setSearchInput("");
+                  setFilters(INITIAL_FILTERS);
+                  setPage(1);
+                  setSuccess("");
+                }}
+              >
+                Clear filters
+              </button>
+            </div>
           </div>
         </section>
 
-        {error && (
-          <div
-            className="admin-enrollment-alert error"
-            role="alert"
-          >
-            {error}
-          </div>
-        )}
+        {success && <p className="success">{success}</p>}
+        {error && <p className="error">{error}</p>}
+        {actionError && <p className="error">{actionError}</p>}
 
-        {notice && (
-          <div
-            className="admin-enrollment-alert success"
-            role="status"
-          >
-            {notice}
-          </div>
-        )}
-
-        <section className="section-card admin-enrollment-results">
-          <div className="admin-enrollment-results-header">
-            <div>
-              <h2>Enrollment records</h2>
-              <p>
-                Showing {firstRecord}–{lastRecord} of{" "}
-                {pagination.total}
-              </p>
-            </div>
-
-            <span className="admin-enrollment-total">
-              {pagination.total} total
-            </span>
-          </div>
-
-          {loading ? (
-            <p className="loading" role="status">
-              Loading enrollments...
+        <section className="section-card">
+          <div className="section-card-header">
+            <h2>Enrollment Requests</h2>
+            <p className="cr008-total">
+              Total matching records: {total}
             </p>
-          ) : enrollments.length === 0 ? (
-            <div className="admin-enrollment-empty">
-              <h3>No enrollments found</h3>
-              <p>Try changing the search text or filters.</p>
-            </div>
-          ) : (
+          </div>
+
+          {loading && (
+            <p className="loading">Loading enrollments...</p>
+          )}
+
+          {!loading && !error && enrollments.length === 0 && (
+            <p className="empty">
+              No enrollments match your search or filters.
+            </p>
+          )}
+
+          {!loading && enrollments.length > 0 && (
             <div className="table-wrapper">
-              <table className="table admin-enrollment-table">
+              <table className="table">
                 <thead>
                   <tr>
                     <th>Student</th>
@@ -420,88 +492,215 @@ function AdminEnrollments() {
                     <th>Course</th>
                     <th>Category</th>
                     <th>Level</th>
-                    <th>Enrolled on</th>
-                    <th>Action</th>
+                    <th>Requested On</th>
+                    <th>Status</th>
+                    <th>Decision</th>
+                    <th className="table-actions-column">Actions</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {enrollments.map((enrollment) => (
-                    <tr key={enrollment.id}>
-                      <td>{enrollment.full_name || "-"}</td>
-                      <td>{enrollment.username || "-"}</td>
-                      <td>{enrollment.course_title || "-"}</td>
-                      <td>{enrollment.course_category || "-"}</td>
-                      <td>{enrollment.course_level || "-"}</td>
-                      <td>{formatDate(enrollment.enrolled_at)}</td>
+                  {enrollments.map((enrollment) => {
+                    const isPending = enrollment.status === "pending";
+                    const isProcessing = processingId === enrollment.id;
 
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-danger admin-enrollment-delete"
-                          onClick={() => handleDelete(enrollment)}
-                          disabled={deletingId === enrollment.id}
-                          aria-label={`Delete enrollment for ${
-                            enrollment.full_name ||
-                            enrollment.username ||
-                            "student"
-                          }`}
-                        >
-                          <FaTrash />
+                    return (
+                      <Fragment key={enrollment.id}>
+                        <tr>
+                          <td>{enrollment.full_name}</td>
+                          <td>{enrollment.username}</td>
+                          <td>{enrollment.title}</td>
+                          <td>{enrollment.category}</td>
+                          <td>
+                            <span className="tag tag-level">
+                              {enrollment.level}
+                            </span>
+                          </td>
+                          <td>{formatDate(enrollment.enrolled_at)}</td>
+                          <td>
+                            <span
+                              className={`status-badge status-${enrollment.status}`}
+                            >
+                              {STATUS_LABELS[enrollment.status] ||
+                                enrollment.status}
+                            </span>
+                          </td>
+                          <td>
+                            {isPending ? (
+                              "-"
+                            ) : (
+                              <>
+                                {enrollment.reviewed_by_name || "-"}
 
-                          {deletingId === enrollment.id
-                            ? "Deleting..."
-                            : "Delete"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                                <span className="decision-meta">
+                                  {formatDate(enrollment.reviewed_at)}
+                                </span>
+
+                                {enrollment.decision_note && (
+                                  <span className="decision-meta">
+                                    {enrollment.decision_note}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </td>
+                          <td>
+                            <div className="review-actions">
+                              {isPending && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-small btn-success"
+                                    disabled={isProcessing}
+                                    onClick={() =>
+                                      handleApprove(enrollment)
+                                    }
+                                  >
+                                    <FaCheck /> Approve
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="btn btn-small btn-outline"
+                                    disabled={isProcessing}
+                                    onClick={() =>
+                                      openReject(enrollment)
+                                    }
+                                  >
+                                    <FaTimes /> Reject
+                                  </button>
+                                </>
+                              )}
+
+                              <button
+                                type="button"
+                                className="btn btn-small btn-danger"
+                                disabled={isProcessing}
+                                onClick={() => handleDelete(enrollment)}
+                              >
+                                <FaTrash /> Remove
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* CR-011: rejection reason form */}
+                        {isPending && rejectingId === enrollment.id && (
+                          <tr className="reject-row">
+                            <td colSpan={9}>
+                              <div className="reject-form">
+                                <label
+                                  htmlFor={`reject-reason-${enrollment.id}`}
+                                >
+                                  Rejection reason (required)
+                                </label>
+
+                                <textarea
+                                  id={`reject-reason-${enrollment.id}`}
+                                  className="input"
+                                  rows={3}
+                                  maxLength={MAX_REASON_LENGTH}
+                                  placeholder="e.g. Required prerequisite is missing"
+                                  value={rejectReason}
+                                  onChange={(event) =>
+                                    setRejectReason(event.target.value)
+                                  }
+                                />
+
+                                <span className="reject-char-count">
+                                  {rejectReason.length} /{" "}
+                                  {MAX_REASON_LENGTH}
+                                </span>
+
+                                <div className="reject-form-actions">
+                                  <button
+                                    type="button"
+                                    className="btn btn-small btn-danger"
+                                    disabled={
+                                      isProcessing ||
+                                      rejectReason.trim() === ""
+                                    }
+                                    onClick={() =>
+                                      submitReject(enrollment)
+                                    }
+                                  >
+                                    <FaTimes />{" "}
+                                    {isProcessing
+                                      ? "Rejecting..."
+                                      : "Confirm rejection"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="btn btn-small btn-secondary"
+                                    disabled={isProcessing}
+                                    onClick={closeReject}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
 
-          <div className="admin-enrollment-pagination">
-            <div className="admin-enrollment-page-info">
-              Page {pagination.totalPages === 0 ? 0 : pagination.page} of{" "}
-              {pagination.totalPages}
-            </div>
+          <div className="cr008-pagination">
+            <p className="cr008-range" aria-live="polite">
+              Showing {start}–{end} of {total}
+            </p>
 
-            <div className="admin-enrollment-page-buttons">
+            <p className="cr008-page-info">
+              Page {page} of {totalPages}
+            </p>
+
+            <div className="cr008-pagination-buttons">
               <button
                 type="button"
-                className="btn btn-outline"
+                className="btn btn-secondary"
+                disabled={loading || page <= 1 || totalPages === 0}
                 onClick={() => setPage(1)}
-                disabled={loading || !pageNumbers.canGoBack}
               >
                 First
               </button>
 
               <button
                 type="button"
-                className="btn btn-outline"
-                onClick={() =>
-                  setPage((current) => Math.max(1, current - 1))
-                }
-                disabled={loading || !pageNumbers.canGoBack}
+                className="btn btn-secondary"
+                disabled={loading || page <= 1 || totalPages === 0}
+                onClick={() => setPage((current) => current - 1)}
               >
                 Previous
               </button>
 
               <button
                 type="button"
-                className="btn btn-outline"
+                className="btn btn-secondary"
+                disabled={
+                  loading ||
+                  totalPages === 0 ||
+                  page >= totalPages
+                }
                 onClick={() => setPage((current) => current + 1)}
-                disabled={loading || !pageNumbers.canGoForward}
               >
                 Next
               </button>
 
               <button
                 type="button"
-                className="btn btn-outline"
-                onClick={() => setPage(pagination.totalPages)}
-                disabled={loading || !pageNumbers.canGoForward}
+                className="btn btn-secondary"
+                disabled={
+                  loading ||
+                  totalPages === 0 ||
+                  page >= totalPages
+                }
+                onClick={() => setPage(totalPages)}
               >
                 Last
               </button>
@@ -515,4 +714,4 @@ function AdminEnrollments() {
   );
 }
 
-export default AdminEnrollments;
+export default ManageEnrollments;

@@ -170,6 +170,18 @@ function StudentDashboard() {
 
           </div>
 
+          <div className="dashboard-card">
+
+            <span className="dashboard-card-value">
+              {show(report?.pendingEnrollments)}
+            </span>
+
+            <span className="dashboard-card-label">
+              Requests Pending Approval
+            </span>
+
+          </div>
+
 
           <div className="dashboard-card">
 

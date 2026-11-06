@@ -62,11 +62,30 @@ CREATE TABLE IF NOT EXISTS enrollments (
 
     course_id INT NOT NULL,
 
+    -- Date the request was submitted
     enrolled_at TIMESTAMP
       DEFAULT CURRENT_TIMESTAMP,
 
-    -- Prevent duplicate enrollment
+    -- CR-011: approval workflow
+    -- pending -> approved | rejected
+    status ENUM('pending', 'approved', 'rejected')
+      NOT NULL DEFAULT 'pending',
+
+    -- Administrator who made the decision (NULL while pending)
+    reviewed_by INT NULL,
+
+    reviewed_at TIMESTAMP NULL DEFAULT NULL,
+
+    -- Rejection reason (required when rejected) / optional approval note
+    decision_note VARCHAR(500) NULL,
+
+    -- One row per student + course.
+    -- A rejected request is re-submitted by resetting this same row to pending.
     UNIQUE (student_id, course_id),
+
+    -- Capacity counts / reports / admin filter
+    INDEX idx_enrollments_course_status (course_id, status),
+    INDEX idx_enrollments_status_enrolled (status, enrolled_at),
 
     -- Student
     FOREIGN KEY (student_id)
@@ -78,6 +97,12 @@ CREATE TABLE IF NOT EXISTS enrollments (
     FOREIGN KEY (course_id)
       REFERENCES courses(id)
       ON DELETE CASCADE
+      ON UPDATE CASCADE,
+
+    -- Reviewing administrator
+    FOREIGN KEY (reviewed_by)
+      REFERENCES users(id)
+      ON DELETE SET NULL
       ON UPDATE CASCADE
 
 );

@@ -7,13 +7,15 @@ const {
   getMyEnrollments,
   getCourseEnrollments,
   getAllEnrollments,
+  reviewEnrollment,
+  cancelMyEnrollment,
   deleteEnrollment
 } = require("../controllers/enrollmentController");
 
 const authMiddleware = require("../middleware/authMiddleware");
 const roleMiddleware = require("../middleware/roleMiddleware");
 
-// Student: enroll in a course
+// Student: request enrollment (saved as "pending")
 router.post(
   "/",
   authMiddleware,
@@ -29,7 +31,15 @@ router.get(
   getMyEnrollments
 );
 
-// Admin: paginated enrollment list
+// Student: cancel own pending / approved enrollment
+router.delete(
+  "/my/:id",
+  authMiddleware,
+  roleMiddleware(["student"]),
+  cancelMyEnrollment
+);
+
+// Admin: paginated enrollment list (?status=pending|approved|rejected)
 router.get(
   "/",
   authMiddleware,
@@ -45,7 +55,15 @@ router.get(
   getCourseEnrollments
 );
 
-// Admin: delete an enrollment
+// Admin: approve or reject a pending request (CR-011)
+router.patch(
+  "/:id/status",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  reviewEnrollment
+);
+
+// Admin: delete an enrollment (any status)
 router.delete(
   "/:id",
   authMiddleware,

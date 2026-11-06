@@ -31,8 +31,10 @@ const Course = {
 
       FROM courses c
 
+      -- CR-011: only APPROVED enrollments use a seat
       LEFT JOIN enrollments e
         ON c.id = e.course_id
+       AND e.status = 'approved'
 
       GROUP BY c.id
 
@@ -73,8 +75,10 @@ const Course = {
 
       FROM courses c
 
+      -- CR-011: only APPROVED enrollments use a seat
       LEFT JOIN enrollments e
         ON c.id = e.course_id
+       AND e.status = 'approved'
 
       WHERE c.id = ?
 
@@ -256,6 +260,7 @@ const Course = {
         SELECT COUNT(*) AS enrolled_count
         FROM enrollments
         WHERE course_id = ?
+          AND status = 'approved'
         `,
         [id]
       );

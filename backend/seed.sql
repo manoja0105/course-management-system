@@ -170,22 +170,40 @@ VALUES
 -- 8 = Full Stack Web Development
 
 
+-- CR-011: every enrollment now has a status.
+-- Admin (user 1) is the reviewer of all decided requests.
+--
+-- Capacity example: "HTML & CSS" allows 2 students.
+--   approved = 1 (Kamal)  -> 1 seat left
+--   pending / rejected rows do NOT use a seat.
+
 INSERT INTO enrollments
 (
     student_id,
-    course_id
+    course_id,
+    status,
+    reviewed_by,
+    reviewed_at,
+    decision_note
 )
 VALUES
 
--- Kamal
-(2, 1),
-(2, 2),
-(2, 6),
+-- Kamal (approved)
+(2, 1, 'approved', 1, NOW(), NULL),
+(2, 2, 'approved', 1, NOW(), NULL),
+(2, 6, 'approved', 1, NOW(), NULL),
 
--- Nimal
-(3, 3),
-(3, 4),
+-- Nimal (approved)
+(3, 3, 'approved', 1, NOW(), NULL),
+(3, 4, 'approved', 1, NOW(), NULL),
 
--- Saman
-(4, 2),
-(4, 7);
+-- Saman (approved)
+(4, 2, 'approved', 1, NOW(), NULL),
+(4, 7, 'approved', 1, NOW(), NULL),
+
+-- Pending requests (waiting for admin)
+(3, 1, 'pending', NULL, NULL, NULL),
+(4, 3, 'pending', NULL, NULL, NULL),
+
+-- Rejected request (student can request again)
+(4, 1, 'rejected', 1, NOW(), 'Required prerequisite is missing');

@@ -226,10 +226,10 @@ function Home() {
 
             <div className="feature-card">
               <span className="feature-icon"><FaBolt /></span>
-              <h3>Enroll in One Click</h3>
+              <h3>Request Enrollment Online</h3>
               <p>
-                Logged in students can enroll in any course instantly
-                without any paperwork.
+                Logged in students send an enrollment request, and an
+                administrator approves or rejects it.
               </p>
             </div>
 

@@ -41,6 +41,10 @@ function AdminDashboard() {
   const [enrollments, setEnrollments] = useState([]);
   const [enrollmentsError, setEnrollmentsError] = useState("");
 
+  // CR-011: requests waiting for approval
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [pendingError, setPendingError] = useState("");
+
   const [loading, setLoading] = useState(true);
 
   const user = getUser();
@@ -48,10 +52,12 @@ function AdminDashboard() {
   useEffect(() => {
     const loadDashboard = async () => {
       // allSettled: if one request fails the other still renders
-      const [reportResult, enrollmentsResult] =
+      const [reportResult, enrollmentsResult, pendingResult] =
         await Promise.allSettled([
           api.get("/reports/overview"),
-          api.get("/enrollments?limit=6"),
+          // CR-011: confirmed (approved) enrollments only
+          api.get("/enrollments?limit=6&status=approved"),
+          api.get("/enrollments?limit=5&status=pending"),
         ]);
 
       if (reportResult.status === "fulfilled") {
@@ -71,6 +77,17 @@ function AdminDashboard() {
         setEnrollmentsError(
           enrollmentsResult.reason?.response?.data?.message ||
             "Failed to load recent enrollments"
+        );
+      }
+
+      if (pendingResult.status === "fulfilled") {
+        setPendingRequests(
+          pendingResult.value.data.enrollments || []
+        );
+      } else {
+        setPendingError(
+          pendingResult.reason?.response?.data?.message ||
+            "Failed to load pending requests"
         );
       }
 
@@ -152,16 +169,29 @@ function AdminDashboard() {
               {show(report?.totalEnrollments)}
             </span>
             <span className="dashboard-card-label">
-              Total Enrollments
+              Approved Enrollments
             </span>
           </div>
+
+          {/* CR-011: pending requests are NOT confirmed enrollments */}
+          <Link
+            to="/admin/enrollments?status=pending"
+            className="dashboard-card dashboard-card-pending dashboard-card-link"
+          >
+            <span className="dashboard-card-value">
+              {show(report?.pendingRequests)}
+            </span>
+            <span className="dashboard-card-label">
+              Pending Requests
+            </span>
+          </Link>
 
           <div className="dashboard-card">
             <span className="dashboard-card-value">
               {show(report?.studentsWithEnrollments)}
             </span>
             <span className="dashboard-card-label">
-              Students With Enrollments
+              Students With Approved Enrollments
             </span>
           </div>
 
@@ -170,7 +200,7 @@ function AdminDashboard() {
               {show(report?.enrollmentsLast30Days)}
             </span>
             <span className="dashboard-card-label">
-              Enrollments (Last 30 Days)
+              Approved (Last 30 Days)
             </span>
           </div>
 
@@ -179,7 +209,7 @@ function AdminDashboard() {
               {show(report?.coursesWithoutEnrollments)}
             </span>
             <span className="dashboard-card-label">
-              Courses Without Enrollments
+              Courses Without Approved Enrollments
             </span>
           </div>
         </div>
@@ -188,7 +218,7 @@ function AdminDashboard() {
         <div className="report-grid">
           <section className="section-card">
             <div className="section-card-header">
-              <h2>Enrollments by Category</h2>
+              <h2>Approved Enrollments by Category</h2>
             </div>
 
             {loading && <p className="loading">Loading...</p>}
@@ -313,10 +343,72 @@ function AdminDashboard() {
           </section>
         </div>
 
+        {/* CR-011: pending enrollment requests */}
+        <section className="section-card">
+          <div className="section-card-header">
+            <h2>Pending Enrollment Requests</h2>
+
+            <Link
+              to="/admin/enrollments?status=pending"
+              className="link-inline"
+            >
+              Review requests
+            </Link>
+          </div>
+
+          {pendingError && (
+            <p className="error">{pendingError}</p>
+          )}
+
+          {loading && (
+            <p className="loading">Loading...</p>
+          )}
+
+          {!loading &&
+            !pendingError &&
+            pendingRequests.length === 0 && (
+              <p className="empty">
+                No requests are waiting for approval.
+              </p>
+            )}
+
+          {!loading && pendingRequests.length > 0 && (
+            <div className="table-wrapper">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Username</th>
+                    <th>Course</th>
+                    <th>Requested On</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {pendingRequests.map((request) => (
+                    <tr key={request.id}>
+                      <td>{request.full_name || "-"}</td>
+                      <td>{request.username || "-"}</td>
+                      <td>{request.title || "-"}</td>
+                      <td>{formatDate(request.enrolled_at)}</td>
+                      <td>
+                        <span className="status-badge status-pending">
+                          Pending
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
         {/* Recent enrollments */}
         <section className="section-card">
           <div className="section-card-header">
-            <h2>Recent Enrollments</h2>
+            <h2>Recent Approved Enrollments</h2>
 
             <Link
               to="/admin/enrollments"
@@ -338,7 +430,7 @@ function AdminDashboard() {
             !enrollmentsError &&
             enrollments.length === 0 && (
               <p className="empty">
-                No enrollments have been made yet.
+                No enrollments have been approved yet.
               </p>
             )}
 
@@ -352,7 +444,7 @@ function AdminDashboard() {
                     <th>Course</th>
                     <th>Category</th>
                     <th>Level</th>
-                    <th>Enrolled On</th>
+                    <th>Approved On</th>
                   </tr>
                 </thead>
 
@@ -368,7 +460,11 @@ function AdminDashboard() {
                           {enrollment.level || "-"}
                         </span>
                       </td>
-                      <td>{formatDate(enrollment.enrolled_at)}</td>
+                      <td>
+                        {formatDate(
+                          enrollment.reviewed_at || enrollment.enrolled_at
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -401,7 +497,7 @@ function AdminDashboard() {
               <span className="quick-action-icon">
                 <FaUsers />
               </span>
-              <span>View and remove enrollments</span>
+              <span>Review requests and manage enrollments</span>
             </Link>
 
             <Link

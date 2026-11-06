@@ -8,6 +8,8 @@ import {
   FaChartLine,
   FaLayerGroup,
   FaTimesCircle,
+  FaClock,
+  FaRedo,
 } from "react-icons/fa";
 
 import api from "../services/api";
@@ -37,6 +39,14 @@ const formatPrice = (value) => {
 };
 
 
+// CR-011: labels shown to the student
+const STATUS_LABELS = {
+  pending: "Request Pending Approval",
+  approved: "Approved",
+  rejected: "Rejected",
+};
+
+
 function MyEnrollments() {
 
   const [enrollments, setEnrollments] = useState([]);
@@ -61,6 +71,13 @@ function MyEnrollments() {
    * newest enrolled first.
    */
   const [sortOption, setSortOption] = useState("newest");
+
+
+  /*
+   * CR-011:
+   * all | pending | approved | rejected
+   */
+  const [statusFilter, setStatusFilter] = useState("all");
 
 
   const user = getUser();
@@ -119,7 +136,9 @@ function MyEnrollments() {
   // CR-006: Cancel enrollment
   // ============================================================
 
-  const handleCancelEnrollment = async (enrollmentId) => {
+  const handleCancelEnrollment = async (enrollment) => {
+
+    const enrollmentId = enrollment.id;
 
     /*
      * Clear previous messages.
@@ -134,7 +153,9 @@ function MyEnrollments() {
      * FR-012 / AC-014
      */
     const confirmed = window.confirm(
-      "Are you sure you want to cancel this enrollment?"
+      enrollment.status === "pending"
+        ? "Are you sure you want to cancel this enrollment request?"
+        : "Are you sure you want to cancel this enrollment?"
     );
 
 
@@ -173,7 +194,7 @@ function MyEnrollments() {
        */
       setSuccess(
         response.data.message ||
-        "Enrollment cancelled successfully."
+        "Cancelled successfully."
       );
 
 
@@ -227,15 +248,36 @@ function MyEnrollments() {
 
   // ============================================================
   // Enrollment Summary
+  //
+  // CR-011: only APPROVED enrollments are counted as enrolled.
+  // Pending requests are shown separately.
   // ============================================================
 
-  const totalEnrollments =
-    enrollments.length;
+  const approvedEnrollments = useMemo(() => {
+
+    return enrollments.filter(
+      (enrollment) => enrollment.status === "approved"
+    );
+
+  }, [enrollments]);
+
+
+  const approvedCount =
+    approvedEnrollments.length;
+
+
+  const pendingCount = useMemo(() => {
+
+    return enrollments.filter(
+      (enrollment) => enrollment.status === "pending"
+    ).length;
+
+  }, [enrollments]);
 
 
   const totalValue = useMemo(() => {
 
-    return enrollments.reduce(
+    return approvedEnrollments.reduce(
       (total, enrollment) => {
 
         return total +
@@ -245,25 +287,25 @@ function MyEnrollments() {
       0
     );
 
-  }, [enrollments]);
+  }, [approvedEnrollments]);
 
 
   const averagePrice = useMemo(() => {
 
-    if (enrollments.length === 0) {
+    if (approvedCount === 0) {
       return 0;
     }
 
-    return totalValue / enrollments.length;
+    return totalValue / approvedCount;
 
-  }, [enrollments.length, totalValue]);
+  }, [approvedCount, totalValue]);
 
 
   const distinctCategories = useMemo(() => {
 
     const categories = new Set();
 
-    enrollments.forEach((enrollment) => {
+    approvedEnrollments.forEach((enrollment) => {
 
       const category =
         String(enrollment.category || "")
@@ -278,7 +320,24 @@ function MyEnrollments() {
 
     return categories.size;
 
-  }, [enrollments]);
+  }, [approvedEnrollments]);
+
+
+  // ============================================================
+  // Status filter
+  // ============================================================
+
+  const visibleEnrollments = useMemo(() => {
+
+    if (statusFilter === "all") {
+      return enrollments;
+    }
+
+    return enrollments.filter(
+      (enrollment) => enrollment.status === statusFilter
+    );
+
+  }, [enrollments, statusFilter]);
 
 
   // ============================================================
@@ -287,7 +346,7 @@ function MyEnrollments() {
 
   const sortedEnrollments = useMemo(() => {
 
-    const sorted = [...enrollments];
+    const sorted = [...visibleEnrollments];
 
     sorted.sort((a, b) => {
 
@@ -384,7 +443,7 @@ function MyEnrollments() {
 
     return sorted;
 
-  }, [enrollments, sortOption]);
+  }, [visibleEnrollments, sortOption]);
 
 
   // ============================================================
@@ -412,8 +471,8 @@ function MyEnrollments() {
             <p className="page-subtitle">
 
               {user?.full_name
-                ? `${user.full_name}, these are the courses you are enrolled in.`
-                : "These are the courses you are enrolled in."}
+                ? `${user.full_name}, these are your enrollment requests and approved courses.`
+                : "These are your enrollment requests and approved courses."}
 
             </p>
 
@@ -489,11 +548,28 @@ function MyEnrollments() {
                 </span>
 
                 <span className="enrollment-summary-value">
-                  {totalEnrollments}
+                  {approvedCount}
                 </span>
 
                 <span className="enrollment-summary-label">
-                  Total Enrolled Courses
+                  Approved Enrollments
+                </span>
+
+              </div>
+
+
+              <div className="enrollment-summary-card">
+
+                <span className="enrollment-summary-icon">
+                  <FaClock />
+                </span>
+
+                <span className="enrollment-summary-value">
+                  {pendingCount}
+                </span>
+
+                <span className="enrollment-summary-label">
+                  Pending Requests
                 </span>
 
               </div>
@@ -567,8 +643,44 @@ function MyEnrollments() {
                   </h2>
 
                   <p className="enrollment-sort-help">
-                    Change the order of your enrolled courses.
+                    Filter by status and change the order of your requests.
                   </p>
+
+                </div>
+
+
+                <div className="form-group enrollment-sort-group">
+
+                  <label htmlFor="enrollment-status">
+                    Status
+                  </label>
+
+                  <select
+                    id="enrollment-status"
+                    className="input"
+                    value={statusFilter}
+                    onChange={(event) =>
+                      setStatusFilter(event.target.value)
+                    }
+                  >
+
+                    <option value="all">
+                      All
+                    </option>
+
+                    <option value="pending">
+                      Pending
+                    </option>
+
+                    <option value="approved">
+                      Approved
+                    </option>
+
+                    <option value="rejected">
+                      Rejected
+                    </option>
+
+                  </select>
 
                 </div>
 
@@ -626,7 +738,7 @@ function MyEnrollments() {
               <div className="empty-box">
 
                 <p className="empty">
-                  You have not enrolled in any courses yet.
+                  You have not requested enrollment in any courses yet.
                 </p>
 
                 <Link
@@ -638,6 +750,16 @@ function MyEnrollments() {
                 </Link>
 
               </div>
+
+            )}
+
+
+            {enrollments.length > 0 &&
+              visibleEnrollments.length === 0 && (
+
+              <p className="empty">
+                No enrollments match the selected status.
+              </p>
 
             )}
 
@@ -656,6 +778,9 @@ function MyEnrollments() {
                     const isCancelling =
                       cancellingId === enrollment.id;
 
+                    const status =
+                      enrollment.status || "approved";
+
 
                     return (
 
@@ -673,6 +798,19 @@ function MyEnrollments() {
 
 
                         <div className="course-card-body">
+
+                          {/* CR-011: status label */}
+
+                          <div className="enrollment-status-row">
+
+                            <span
+                              className={`status-badge status-${status}`}
+                            >
+                              {STATUS_LABELS[status] || status}
+                            </span>
+
+                          </div>
+
 
                           <div className="course-card-tags">
 
@@ -727,14 +865,46 @@ function MyEnrollments() {
 
                             <li>
                               <strong>
-                                Enrolled on:
+                                Requested on:
                               </strong>{" "}
                               {formatDate(
                                 enrollment.enrolled_at
                               )}
                             </li>
 
+
+                            {status !== "pending" && (
+
+                              <li>
+                                <strong>
+                                  {status === "approved"
+                                    ? "Approved on:"
+                                    : "Decision date:"}
+                                </strong>{" "}
+                                {formatDate(
+                                  enrollment.reviewed_at
+                                )}
+                              </li>
+
+                            )}
+
                           </ul>
+
+
+                          {/* CR-011: rejection reason */}
+
+                          {status === "rejected" && (
+
+                            <p className="decision-note">
+
+                              <strong>Reason:</strong>{" "}
+
+                              {enrollment.decision_note ||
+                                "No reason was given."}
+
+                            </p>
+
+                          )}
 
 
                           {/* View Course */}
@@ -748,27 +918,46 @@ function MyEnrollments() {
 
 
                           {/* =================================================
-                              CR-006: Cancel Enrollment
+                              CR-006 / CR-011: Cancel
+                              - pending  -> cancel the request
+                              - approved -> cancel the enrollment
+                              - rejected -> no cancel (request again)
                               ================================================= */}
 
-                          <button
-                            type="button"
-                            className="btn btn-danger btn-block cancel-enrollment-btn"
-                            onClick={() =>
-                              handleCancelEnrollment(
-                                enrollment.id
-                              )
-                            }
-                            disabled={isCancelling}
-                          >
+                          {status === "rejected" ? (
 
-                            <FaTimesCircle />
+                            <Link
+                              to={`/courses/${enrollment.course_id}`}
+                              className="btn btn-primary btn-block cancel-enrollment-btn"
+                            >
+                              <FaRedo />
+                              Request Again
+                            </Link>
 
-                            {isCancelling
-                              ? "Cancelling..."
-                              : "Cancel Enrollment"}
+                          ) : (
 
-                          </button>
+                            <button
+                              type="button"
+                              className="btn btn-danger btn-block cancel-enrollment-btn"
+                              onClick={() =>
+                                handleCancelEnrollment(
+                                  enrollment
+                                )
+                              }
+                              disabled={isCancelling}
+                            >
+
+                              <FaTimesCircle />
+
+                              {isCancelling
+                                ? "Cancelling..."
+                                : status === "pending"
+                                  ? "Cancel Request"
+                                  : "Cancel Enrollment"}
+
+                            </button>
+
+                          )}
 
                         </div>
 
