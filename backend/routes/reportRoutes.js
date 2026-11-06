@@ -7,24 +7,22 @@ const {
   getMyReport,
 } = require("../controllers/reportController");
 
-const {
-  authenticate,
-  authorizeRoles,
-} = require("../middleware/authMiddleware");
+const authMiddleware = require("../middleware/authMiddleware");
+const roleMiddleware = require("../middleware/roleMiddleware");
 
 // Admin only: GET /api/reports/overview
 router.get(
   "/overview",
-  authenticate,
-  authorizeRoles("ADMIN"),
+  authMiddleware,
+  roleMiddleware(["admin"]),
   getAdminOverview
 );
 
 // Student only: GET /api/reports/my
 router.get(
   "/my",
-  authenticate,
-  authorizeRoles("STUDENT"),
+  authMiddleware,
+  roleMiddleware(["student"]),
   getMyReport
 );
 

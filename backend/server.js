@@ -15,15 +15,13 @@ const courseRoutes = require("./routes/courseRoutes");
 const enrollmentRoutes = require("./routes/enrollmentRoutes");
 const reportRoutes = require("./routes/reportRoutes");
 
-const {
-  authenticate,
-} = require("./middleware/authMiddleware");
+const authMiddleware = require("./middleware/authMiddleware");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/courses", courseRoutes);
 
-app.use("/api/users", authenticate, userRoutes);
-app.use("/api/enrollments", authenticate, enrollmentRoutes);
+app.use("/api/users", authMiddleware, userRoutes);
+app.use("/api/enrollments", authMiddleware, enrollmentRoutes);
 
 // Authentication and role checks are handled in reportRoutes.js
 app.use("/api/reports", reportRoutes);
